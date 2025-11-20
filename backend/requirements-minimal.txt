@@ -1,0 +1,18 @@
+Django==4.2.16
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+
+# LangChain and LangGraph
+langgraph==0.2.52
+langchain==0.3.7
+langchain-openai==0.2.8
+langchain-community==0.3.7
+
+# Web scraping and data ingestion (lighter alternatives)
+beautifulsoup4==4.12.2
+requests==2.31.0
+
+# Essential utilities only
+redis==5.0.1

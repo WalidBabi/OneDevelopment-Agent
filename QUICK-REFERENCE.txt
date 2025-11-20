@@ -1,0 +1,149 @@
+═══════════════════════════════════════════════════════════════════
+                   ONE DEVELOPMENT AI AGENT
+                      QUICK REFERENCE CARD
+═══════════════════════════════════════════════════════════════════
+
+🌐 ACCESS URLS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Frontend:      http://51.20.117.103:3000
+Backend API:   http://51.20.117.103:8000
+Admin Panel:   http://51.20.117.103:8000/admin
+Login:         admin / OneDev2024!
+
+📊 SERVER MANAGEMENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cd /home/ec2-user/OneDevelopment-Agent
+
+./manage-servers.sh start      # Start all servers
+./manage-servers.sh stop       # Stop all servers
+./manage-servers.sh restart    # Restart all servers
+./manage-servers.sh status     # Check status
+./manage-servers.sh logs       # View logs
+
+✅ COMPLETED FEATURES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Logo visible (colored, not white)
+✅ Suggestions horizontal (no scrollbar)
+✅ Nova intelligence (12 knowledge entries)
+✅ Vector store persistent (survives restarts)
+✅ Database access (multiple methods)
+✅ LinkedIn integration ready (awaiting data)
+
+🧪 TEST NOVA WITH THESE QUESTIONS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ "What are your upcoming developments?"
+   → Marina Heights Tower, Palm Residence, etc.
+
+✅ "What are your office hours?"
+   → Mon-Fri 9-6, Sat 10-4, Sunday closed
+
+✅ "What's the ROI on your properties?"
+   → 7-9% annually
+
+✅ "How much is a 2 bedroom apartment?"
+   → From AED 1,450,000
+
+✅ "What amenities do you offer?"
+   → Pools, gyms, smart home, Italian marble
+
+📚 KNOWLEDGE BASE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Total Entries:     12 active
+Vector Store:      Persistent (248KB)
+Embeddings:        Enabled
+Categories:        Company, Projects, Investment, Contact, etc.
+
+🗄️ DATABASE ACCESS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Option 1: Django Admin
+  URL:  http://51.20.117.103:8000/admin
+  User: admin
+  Pass: OneDev2024!
+
+Option 2: Command Line
+  psql -U onedevelopment -h localhost -d onedevelopment_agent
+  Password: onedevelopment123
+
+📝 ADD MORE KNOWLEDGE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Go to: http://51.20.117.103:8000/admin
+2. Click: "Knowledge Bases"
+3. Click: "ADD KNOWLEDGE BASE"
+4. Fill in: Title, Content, Summary
+5. Set: Source Type (Manual/LinkedIn/etc)
+6. Check: "Is active"
+7. Save
+8. Restart: ./manage-servers.sh restart
+
+🔗 LINKEDIN INTEGRATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+See: LINKEDIN-INTEGRATION-GUIDE.md
+Options: Manual, API, Web Scraping, PhantomBuster, RSS
+
+Quick: Copy LinkedIn content → Add via Admin Panel
+
+📁 IMPORTANT FILES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPLETE-STATUS.md              - Full status report
+FINAL-UPDATES-SUMMARY.md        - All updates & fixes
+DATABASE-ACCESS.md              - Database access guide
+LINKEDIN-INTEGRATION-GUIDE.md   - LinkedIn setup options
+QUICK-START.md                  - Original quick start
+manage-servers.sh               - Server management script
+
+💾 STORAGE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Root Volume:  20 GB (8.5 GB used)
+Data Volume:  50 GB (4.7 GB used)
+Vector Store: 248 KB
+Database:     ~10 MB
+
+🔐 CREDENTIALS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Django Admin:
+  User: admin
+  Pass: OneDev2024!
+
+PostgreSQL:
+  Database: onedevelopment_agent
+  User:     onedevelopment
+  Password: onedevelopment123
+  Host:     localhost
+  Port:     5432
+
+OpenAI:
+  API Key: (in backend/.env)
+
+📊 SYSTEM STATUS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Frontend:      Running (port 3000)
+✅ Backend:       Running (port 8000)
+✅ PostgreSQL:    Running (port 5432)
+✅ ChromaDB:      Persistent with 12 docs
+✅ Embeddings:    Enabled (sentence-transformers)
+
+🚨 TROUBLESHOOTING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Servers not running:
+  ./manage-servers.sh start
+
+Frontend errors:
+  ./manage-servers.sh logs frontend
+
+Backend errors:
+  ./manage-servers.sh logs backend
+
+Database connection issues:
+  sudo systemctl status postgresql
+  sudo systemctl restart postgresql
+
+Knowledge not updating:
+  ./manage-servers.sh restart
+
+═══════════════════════════════════════════════════════════════════
+                    ALL FEATURES COMPLETE ✅
+                      READY FOR USE! 🚀
+═══════════════════════════════════════════════════════════════════
+
+Test now: http://51.20.117.103:3000
+

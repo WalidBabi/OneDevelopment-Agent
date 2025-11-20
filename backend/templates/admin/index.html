@@ -1,0 +1,20 @@
+{% extends "admin/index.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="background: linear-gradient(135deg, #341a60 0%, #966bfc 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; text-align: center;">
+    <h2 style="margin: 0 0 10px 0; font-size: 28px;">🏢 One Development Database Management</h2>
+    <p style="margin: 0; font-size: 16px; opacity: 0.9;">Welcome to your PostgreSQL admin panel. Manage your AI agent's data below.</p>
+</div>
+
+{{ block.super }}
+
+<div class="custom-branding">
+    <p><strong>One Development AI Agent</strong> | PostgreSQL Database v15</p>
+    <p style="font-size: 12px; opacity: 0.7; margin-top: 10px;">
+        Database: <strong>onedevelopment_agent</strong> | 
+        Host: <strong>localhost:5432</strong>
+    </p>
+</div>
+{% endblock %}
+

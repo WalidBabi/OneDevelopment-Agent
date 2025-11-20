@@ -1,0 +1,256 @@
+/* One Development Admin Panel - Custom Styling */
+
+:root {
+    --primary-color: #341a60;
+    --secondary-color: #966bfc;
+    --font-color: #e6dafe;
+    --black: #000;
+    --white: #fff;
+}
+
+/* Header Styling */
+#header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: var(--white);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#branding h1, #branding h1 a:link, #branding h1 a:visited {
+    color: var(--white);
+    font-weight: 700;
+}
+
+#branding h1 a:hover {
+    color: var(--font-color);
+}
+
+/* Logo Container */
+#branding {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+}
+
+#branding::before {
+    content: '';
+    display: inline-block;
+    width: 180px;
+    height: 40px;
+    background-image: url('../img/logo.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    margin-right: 20px;
+    filter: brightness(0) invert(1);
+}
+
+#branding h1 {
+    display: none;
+}
+
+/* User Tools */
+#user-tools {
+    color: var(--white);
+    text-align: right;
+}
+
+#user-tools a {
+    color: var(--font-color);
+    font-weight: 500;
+}
+
+#user-tools a:hover {
+    color: var(--white);
+}
+
+/* Navigation */
+.module h2, .module caption, .inline-group h2 {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: var(--white);
+    font-weight: 600;
+}
+
+/* Links */
+a:link, a:visited {
+    color: var(--secondary-color);
+}
+
+a:focus, a:hover {
+    color: var(--primary-color);
+}
+
+/* Buttons */
+.button, input[type=submit], input[type=button], .submit-row input, button {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: var(--white);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.button:hover, input[type=submit]:hover, input[type=button]:hover, .submit-row input:hover, button:hover {
+    background: linear-gradient(135deg, var(--secondary-color) 0%, var(--primary-color) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(148, 107, 252, 0.3);
+}
+
+.button.default, input[type=submit].default, .submit-row input.default {
+    background: var(--secondary-color);
+}
+
+.button.default:hover, input[type=submit].default:hover {
+    background: var(--primary-color);
+}
+
+/* Dashboard Module Links */
+.module ul {
+    border-left: 3px solid var(--secondary-color);
+}
+
+.dashboard .module table th a:link, .dashboard .module table th a:visited {
+    color: var(--secondary-color);
+}
+
+/* Change List */
+#changelist-filter li.selected a {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+#changelist-filter li.selected {
+    border-left: 5px solid var(--secondary-color);
+    background: rgba(150, 107, 252, 0.1);
+}
+
+/* Breadcrumbs */
+div.breadcrumbs {
+    background: var(--primary-color);
+    color: var(--font-color);
+}
+
+div.breadcrumbs a {
+    color: var(--font-color);
+}
+
+div.breadcrumbs a:hover {
+    color: var(--white);
+}
+
+/* Tables */
+thead th, .form-row td ul li label {
+    background: var(--primary-color);
+    color: var(--white);
+}
+
+tr:hover {
+    background: rgba(150, 107, 252, 0.05);
+}
+
+/* Form Rows */
+.form-row {
+    border-bottom: 1px solid rgba(52, 26, 96, 0.1);
+}
+
+/* Success Messages */
+.messagelist .success {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: var(--white);
+}
+
+/* Object Tools */
+.object-tools li a {
+    background: var(--secondary-color);
+    color: var(--white);
+}
+
+.object-tools li a:hover {
+    background: var(--primary-color);
+}
+
+/* Paginator */
+.paginator a:link, .paginator a:visited {
+    background: var(--white);
+    border: 1px solid var(--secondary-color);
+    color: var(--secondary-color);
+}
+
+.paginator a.showall {
+    border: none;
+    background: transparent;
+    color: var(--secondary-color);
+}
+
+.paginator a:hover {
+    background: var(--secondary-color);
+    color: var(--white);
+}
+
+/* Login Page */
+.login #header {
+    height: auto;
+    padding: 40px 0;
+}
+
+.login #branding h1 {
+    display: block;
+    margin: 0 auto;
+}
+
+.login #content {
+    padding: 40px 20px;
+}
+
+.login .form-row {
+    padding: 10px 0;
+}
+
+.login .submit-row {
+    padding: 20px 0 0 0;
+}
+
+/* Custom Styling for Database Stats */
+.dashboard .module {
+    background: var(--white);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.dashboard .module h2 {
+    border-radius: 8px 8px 0 0;
+}
+
+/* Footer */
+#footer {
+    background: var(--primary-color);
+    color: var(--font-color);
+    padding: 20px;
+    text-align: center;
+    margin-top: 40px;
+}
+
+/* Custom Branding Text */
+.custom-branding {
+    text-align: center;
+    padding: 20px;
+    color: var(--primary-color);
+    font-size: 14px;
+    border-top: 2px solid var(--secondary-color);
+    margin-top: 20px;
+}
+
+.custom-branding strong {
+    color: var(--secondary-color);
+    font-weight: 700;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #branding::before {
+        width: 120px;
+        height: 30px;
+    }
+}
+

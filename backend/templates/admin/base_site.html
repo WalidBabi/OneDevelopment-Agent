@@ -1,0 +1,21 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | One Development Admin{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">One Development Database Admin</a></h1>
+{% endblock %}
+
+{% block extrahead %}{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin/css/custom_admin.css' %}">
+<style>
+    /* Additional inline styles for better logo display */
+    #header #branding {
+        background: linear-gradient(135deg, #341a60 0%, #966bfc 100%);
+    }
+</style>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
