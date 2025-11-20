@@ -26,3 +26,7 @@ celery==5.3.4
 redis==5.0.1
 python-linkedin-v2==0.9.1
 
+# PDF processing
+PyPDF2==3.0.1
+pypdf==3.17.4
+

@@ -5,6 +5,7 @@ from . import views
 router = DefaultRouter()
 router.register(r'knowledge', views.KnowledgeBaseViewSet, basename='knowledge')
 router.register(r'conversations', views.ConversationViewSet, basename='conversation')
+router.register(r'pdf-documents', views.PDFDocumentViewSet, basename='pdf-document')
 
 urlpatterns = [
     path('', include(router.urls)),

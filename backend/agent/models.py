@@ -108,3 +108,25 @@ class SuggestedQuestion(models.Model):
     def __str__(self):
         return self.question
 
+
+class PDFDocument(models.Model):
+    """Store uploaded PDF documents for knowledge base"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=500)
+    file = models.FileField(upload_to='pdfs/')
+    description = models.TextField(blank=True)
+    extracted_text = models.TextField(blank=True)
+    page_count = models.IntegerField(default=0)
+    file_size = models.IntegerField(default=0)  # in bytes
+    is_indexed = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)  # Default to True so uploads appear immediately
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return self.title
+

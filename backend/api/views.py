@@ -1,14 +1,17 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
-from agent.models import Conversation, Message, KnowledgeBase, SuggestedQuestion
+from agent.models import Conversation, Message, KnowledgeBase, SuggestedQuestion, PDFDocument
 from .serializers import (
     ConversationSerializer, MessageSerializer, ChatRequestSerializer,
-    ChatResponseSerializer, SuggestedQuestionSerializer, KnowledgeBaseSerializer
+    ChatResponseSerializer, SuggestedQuestionSerializer, KnowledgeBaseSerializer,
+    PDFDocumentSerializer
 )
 from agent.langgraph_agent import OneDevelopmentAgent
 from agent.data_ingestor import OneDevelopmentDataIngestor
+from agent.pdf_processor import PDFProcessor
 import uuid
 from datetime import datetime
 import random
@@ -221,17 +224,36 @@ class KnowledgeBaseViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-created_at')
 
 
-class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
+class ConversationViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for viewing conversations
+    ViewSet for viewing and managing conversations
     """
     queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
     lookup_field = 'session_id'
     
+    def get_queryset(self):
+        """Return conversations ordered by most recent"""
+        return Conversation.objects.all().order_by('-updated_at')
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete a conversation and all its messages"""
+        try:
+            conversation = self.get_object()
+            conversation.delete()
+            return Response(
+                {'message': 'Conversation deleted successfully'},
+                status=status.HTTP_200_OK
+            )
+        except Conversation.DoesNotExist:
+            return Response(
+                {'error': 'Conversation not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
     @action(detail=True, methods=['delete'])
     def clear_history(self, request, session_id=None):
-        """Clear conversation history"""
+        """Clear conversation messages but keep the conversation"""
         try:
             conversation = self.get_object()
             conversation.messages.all().delete()
@@ -244,4 +266,61 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 {'error': 'Conversation not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class PDFDocumentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing PDF documents
+    Only accessible via admin panel
+    """
+    queryset = PDFDocument.objects.all()  # Show all documents, not just active
+    serializer_class = PDFDocumentSerializer
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.order_by('-created_at')
+    
+    def perform_create(self, serializer):
+        """Save PDF and trigger indexing"""
+        pdf_document = serializer.save()
+        
+        # Process and index the PDF
+        processor = PDFProcessor()
+        try:
+            processor.process_and_index_pdf(pdf_document)
+        except Exception as e:
+            # Mark as not indexed if there's an error
+            pdf_document.is_indexed = False
+            pdf_document.save()
+            # Re-raise to let the create method handle the error
+            raise
+    
+    @action(detail=True, methods=['post'])
+    def reindex(self, request, pk=None):
+        """Manually trigger reindexing of a PDF"""
+        pdf_document = self.get_object()
+        processor = PDFProcessor()
+        
+        try:
+            result = processor.process_and_index_pdf(pdf_document)
+            return Response({
+                'message': 'PDF reindexed successfully',
+                'result': result
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'error': f'Failed to reindex PDF: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def reindex_all(self, request):
+        """Reindex all active PDFs"""
+        processor = PDFProcessor()
+        results = processor.reindex_all_pdfs()
+        
+        return Response({
+            'message': 'Reindexing completed',
+            'results': results
+        }, status=status.HTTP_200_OK)
 

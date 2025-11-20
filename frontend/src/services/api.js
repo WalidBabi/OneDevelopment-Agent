@@ -43,6 +43,26 @@ export const chatService = {
     }
   },
 
+  getAllConversations: async () => {
+    try {
+      const response = await api.get('/conversations/');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      throw error;
+    }
+  },
+
+  deleteConversation: async (sessionId) => {
+    try {
+      const response = await api.delete(`/conversations/${sessionId}/`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      throw error;
+    }
+  },
+
   ingestData: async (source = 'initial') => {
     try {
       const response = await api.post('/ingest-data/', { source });

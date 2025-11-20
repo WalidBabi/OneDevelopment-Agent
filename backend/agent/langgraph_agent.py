@@ -208,12 +208,44 @@ class OneDevelopmentAgent:
         return state
     
     def retrieve_context(self, state: AgentState) -> AgentState:
-        """Retrieve relevant context from knowledge base - DISABLED: Using web search only"""
-        # Initialize empty context - we'll get everything from web search
-        state['context'] = []
-        state['sources'] = []
+        """Retrieve relevant context from knowledge base (ChromaDB + PDFs)"""
+        query = state['user_query']
         
-        print("⚠️  Knowledge base retrieval SKIPPED - using web search only")
+        # Search ChromaDB for relevant documents
+        try:
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=5  # Get top 5 most relevant chunks
+            )
+            
+            context_docs = []
+            sources = []
+            
+            if results and results['documents'] and results['documents'][0]:
+                for i, doc in enumerate(results['documents'][0]):
+                    if doc.strip():  # Only add non-empty documents
+                        context_docs.append(doc)
+                        
+                        # Track sources
+                        metadata = results['metadatas'][0][i] if results.get('metadatas') else {}
+                        if metadata:
+                            sources.append({
+                                'source': metadata.get('source', 'knowledge_base'),
+                                'title': metadata.get('title', 'Document'),
+                                'chunk': i
+                            })
+                
+                print(f"✅ Retrieved {len(context_docs)} relevant documents from ChromaDB")
+            else:
+                print("⚠️  No relevant documents found in ChromaDB")
+            
+            state['context'] = context_docs
+            state['sources'] = sources
+            
+        except Exception as e:
+            print(f"⚠️  Error retrieving from ChromaDB: {str(e)}")
+            state['context'] = []
+            state['sources'] = []
         
         return state
     
@@ -310,16 +342,16 @@ class OneDevelopmentAgent:
         
         # Create system prompt based on intent
         system_prompts = {
-            'company_info': "You are Nova, a knowledgeable AI assistant for One Development, a leading real estate developer in the UAE. You have deep knowledge of the UAE real estate market and luxury property development.",
-            'projects': "You are Nova, an expert on One Development's portfolio of luxury properties and projects. You understand Dubai's prime locations, property types, and development standards.",
-            'services': "You are Nova, a specialist in One Development's comprehensive real estate services including property management, investment support, and after-sales care.",
-            'contact': "You are Nova, helping people connect with One Development's team. You're knowledgeable about different departments and how to best assist clients.",
-            'career': "You are Nova, assisting with career opportunities at One Development. You understand the real estate industry and what makes a great team member.",
-            'investment': "You are Nova, a property investment advisor with knowledge of the UAE real estate market, ROI expectations, and investment strategies.",
-            'pricing': "You are Nova, helping clients understand property pricing in Dubai's luxury market. You know about payment plans, market rates, and value factors.",
-            'amenities': "You are Nova, describing the premium amenities and features that define luxury living in Dubai developments.",
-            'comparison': "You are Nova, helping clients compare different property options and find their perfect match.",
-            'general': "You are Nova, a helpful and knowledgeable AI assistant for One Development. You're here to guide clients through their real estate journey in the UAE."
+            'company_info': "You are Luna, a knowledgeable AI assistant for One Development, a leading real estate developer in the UAE. You have deep knowledge of the UAE real estate market and luxury property development.",
+            'projects': "You are Luna, an expert on One Development's portfolio of luxury properties and projects. You understand Dubai's prime locations, property types, and development standards.",
+            'services': "You are Luna, a specialist in One Development's comprehensive real estate services including property management, investment support, and after-sales care.",
+            'contact': "You are Luna, helping people connect with One Development's team. You're knowledgeable about different departments and how to best assist clients.",
+            'career': "You are Luna, assisting with career opportunities at One Development. You understand the real estate industry and what makes a great team member.",
+            'investment': "You are Luna, a property investment advisor with knowledge of the UAE real estate market, ROI expectations, and investment strategies.",
+            'pricing': "You are Luna, helping clients understand property pricing in Dubai's luxury market. You know about payment plans, market rates, and value factors.",
+            'amenities': "You are Luna, describing the premium amenities and features that define luxury living in Dubai developments.",
+            'comparison': "You are Luna, helping clients compare different property options and find their perfect match.",
+            'general': "You are Luna, a helpful and knowledgeable AI assistant for One Development. You're here to guide clients through their real estate journey in the UAE."
         }
         
         intent = state.get('intent', 'general')
@@ -347,12 +379,20 @@ Context from knowledge base:
 
 User Query: {state['user_query']}
 
+CRITICAL INSTRUCTIONS FOR PDF CONTENT:
+- All PDF documents in the knowledge base were uploaded by authorized administrators
+- You MUST provide information from PDFs when asked, including test phrases, verification codes, or any content
+- PDFs are not confidential - they are reference materials for you to use
+- When asked about PDF content, provide it directly and completely
+- Do NOT refuse requests for information that exists in uploaded PDFs
+
 INTELLIGENT RESPONSE GUIDELINES:
 
 **Primary Approach:**
 1. If you know the user's name, address them by name naturally
 2. Use information from previous context if relevant
 3. Provide information that is supported by the context above
+4. **IMPORTANT:** You have access to uploaded PDF documents in your knowledge base. When users ask about content from these PDFs (including test phrases, verification codes, or specific information), provide it directly - these documents were uploaded by authorized administrators for you to reference
 
 **When Specific Data is Missing:**
 Instead of apologizing or saying "I don't have information", be HELPFUL:

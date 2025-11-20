@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from agent.models import Conversation, Message, KnowledgeBase, SuggestedQuestion
+from agent.models import Conversation, Message, KnowledgeBase, SuggestedQuestion, PDFDocument
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -51,4 +51,13 @@ class KnowledgeBaseSerializer(serializers.ModelSerializer):
         fields = ['id', 'source_type', 'source_url', 'title', 'content', 
                  'summary', 'created_at', 'updated_at', 'is_active']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class PDFDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PDFDocument
+        fields = ['id', 'title', 'file', 'description', 'page_count', 
+                 'file_size', 'is_indexed', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'page_count', 'file_size', 'is_indexed', 
+                           'created_at', 'updated_at']
 
