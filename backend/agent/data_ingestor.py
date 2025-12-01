@@ -203,6 +203,34 @@ class OneDevelopmentDataIngestor:
                 ''',
                 'source_type': 'manual',
                 'category': 'company_info'
+            },
+            {
+                'title': 'Career Opportunities at One Development',
+                'content': '''
+                One Development continues to scale its teams across sales, delivery, brand, and corporate functions in Dubai.
+                
+                Current focus areas include:
+                - Sales & Advisory: Property Consultants, Senior Relationship Managers, and Investment Advisors who can guide high-net-worth clients through Dubai off-plan and ready inventory.
+                - Project Delivery & Design: Development Managers, Project Coordinators, Site Engineers, Interior Designers, and QA/QC specialists who keep construction milestones on track.
+                - Marketing & Brand: Digital Marketing Strategists, Content Producers, Event Leads, and Partnerships Managers who amplify the Nova/Luna brand rollouts.
+                - Customer Experience & After-Sales: Handover Coordinators, Client Relationship Executives, and Service Operations Leads who manage snagging, handovers, and post-sales service.
+                - Corporate Operations: Finance Analysts, Procurement Specialists, HR Business Partners, and Legal/Compliance Officers supporting day-to-day operations.
+                - Early Talent: 3-6 month internships in marketing, design, operations, and data, with mentorship from senior leaders.
+                
+                Candidate expectations:
+                - Demonstrated UAE real estate or large-project experience (RERA certification preferred for client-facing roles).
+                - Strong negotiation, stakeholder management, and CRM/PropTech proficiency.
+                - Multilingual communication (English plus Arabic, Russian, or Mandarin is highly valued).
+                - Portfolio or case studies for design, marketing, and delivery roles.
+                
+                Application process:
+                1. Submit a CV (and portfolio if applicable) via the careers section on www.oneuae.com or the One Development LinkedIn page.
+                2. Highlight target role, notice period, visa status, and relevant project experience.
+                3. HR screens profiles within 3 business days and coordinates two interview rounds (capabilities + leadership fit). Some roles include a short practical assignment.
+                4. Successful candidates receive written offers with role scope, compensation structure, and onboarding timeline.
+                ''',
+                'source_type': 'manual',
+                'category': 'career'
             }
         ]
         
