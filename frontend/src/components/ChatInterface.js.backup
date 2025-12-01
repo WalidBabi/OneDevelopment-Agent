@@ -2,7 +2,125 @@ import React, { useState, useEffect, useRef } from 'react';
 import { chatService } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
+import Sidebar from './Sidebar';
 import './ChatInterface.css';
+
+// Streaming component - uses refs for direct DOM updates to bypass React batching
+// Use React.memo to prevent re-renders that would clear our DOM updates
+const ThinkingStream = React.memo(({ thinkingDomRef, responseDomRef, isStreaming, toolInfo }) => {
+  console.log('[ThinkingStream] ⚡ RENDER - isStreaming:', isStreaming);
+  
+  if (!isStreaming) return null;
+
+  return (
+    <div className="thinking-stream-container">
+      <div className="thinking-stream-header">
+        <span className="stream-brain">🧠</span>
+        <span className="stream-title">Luna's Brain</span>
+        <span className="stream-status live">● Live</span>
+      </div>
+      
+      {/* Phase indicator */}
+      <div className="phase-indicator">
+        <span className="phase active">💭 Thinking</span>
+        <span className="phase-arrow">→</span>
+        <span className={`phase ${toolInfo ? 'active' : ''}`}>🔍 Searching</span>
+        <span className="phase-arrow">→</span>
+        <span className="phase">✍️ Writing</span>
+      </div>
+      
+      {/* Thinking section - DOM ref for direct updates */}
+      <div className="thinking-section">
+        <div className="section-label">● Reasoning:</div>
+        <div ref={thinkingDomRef} className="token-stream thinking-tokens"></div>
+      </div>
+      
+      {/* Tool usage */}
+      {toolInfo && (
+        <div className="tool-section">
+          <div className="tool-badge">
+            <span className="tool-icon">🔍</span>
+            <span className="tool-name">{toolInfo.tool}</span>
+            {toolInfo.query && <span className="tool-query">→ "{toolInfo.query}"</span>}
+          </div>
+          {toolInfo.result && <div className="tool-result-preview">{toolInfo.result}</div>}
+        </div>
+      )}
+      
+      {/* Response section - DOM ref for direct updates */}
+      <div className="response-section">
+        <div className="section-label">● Response:</div>
+        <div ref={responseDomRef} className="token-stream response-tokens">
+          
+        </div>
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison: Only re-render when streaming stops
+  // This prevents React from clearing our direct DOM updates
+  if (prevProps.isStreaming && !nextProps.isStreaming) {
+    console.log('[ThinkingStream] 🔄 Allowing re-render (streaming stopped)');
+    return false; // Allow re-render
+  }
+  // Block all other re-renders while streaming
+  if (prevProps.isStreaming && nextProps.isStreaming) {
+    console.log('[ThinkingStream] 🚫 Blocking re-render (still streaming)');
+    return true; // Block re-render
+  }
+  return false; // Allow re-render in other cases
+});
+
+// Legacy Thinking Steps Component (for non-streaming fallback)
+const ThinkingSteps = ({ steps, isVisible }) => {
+  if (!isVisible || !steps || steps.length === 0) return null;
+
+  return (
+    <div className="thinking-container">
+      <div className="thinking-header">
+        <span className="thinking-brain">🧠</span>
+        <span className="thinking-title">Luna's Thinking Process</span>
+      </div>
+      <div className="thinking-steps">
+        {steps.map((step, index) => (
+          <div 
+            key={index} 
+            className={`thinking-step ${step.type}`}
+            style={{ animationDelay: `${index * 0.15}s` }}
+          >
+            {step.type === 'thinking' && (
+              <>
+                <span className="step-icon">💭</span>
+                <span className="step-text">{step.description}</span>
+              </>
+            )}
+            {step.type === 'tool_call' && (
+              <>
+                <span className="step-icon">{step.description.split(' ')[0]}</span>
+                <span className="step-text">
+                  {step.description.split(' ').slice(1).join(' ')}
+                  {step.query && <span className="step-query">"{step.query}"</span>}
+                </span>
+              </>
+            )}
+            {step.type === 'tool_result' && (
+              <>
+                <span className="step-icon">✅</span>
+                <span className="step-text step-result">Found relevant information</span>
+              </>
+            )}
+            {step.type === 'responding' && (
+              <>
+                <span className="step-icon">✨</span>
+                <span className="step-text">{step.description}</span>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState([]);
@@ -11,10 +129,38 @@ const ChatInterface = () => {
   const [sessionId, setSessionId] = useState(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [error, setError] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [currentThinking, setCurrentThinking] = useState([]);
+  const [showThinking, setShowThinking] = useState(true);
+  const [streamEvents, setStreamEvents] = useState([]);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [useStreaming, setUseStreaming] = useState(true); // Toggle streaming mode
+  const [currentPhase, setCurrentPhase] = useState('');
+  const [toolInfo, setToolInfo] = useState(null);
+  
+  // Refs to track accumulated text (avoids closure issues)
+  const thinkingRef = useRef('');
+  const responseRef = useRef('');
   const messagesEndRef = useRef(null);
+  
+  // DOM refs for direct updates (bypasses React batching)
+  const thinkingDomRef = useRef(null);
+  const responseDomRef = useRef(null);
+  const elementIdRef = useRef(0); // Track if element changes
 
-  // Initialize session and fetch suggested questions
+  // Initialize: Load conversations and current session
   useEffect(() => {
+    initializeApp();
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const initializeApp = async () => {
     // Generate or retrieve session ID
     let storedSessionId = localStorage.getItem('chat_session_id');
     if (!storedSessionId) {
@@ -23,10 +169,16 @@ const ChatInterface = () => {
     }
     setSessionId(storedSessionId);
 
-    // Fetch initial suggested questions
+    // Load all conversations
+    await loadConversations();
+
+    // Load current conversation history
+    await loadConversationHistory(storedSessionId);
+
+    // Fetch suggested questions
     fetchSuggestedQuestions();
 
-    // Set up rotating suggested questions (every 15 seconds)
+    // Set up rotating suggested questions
     const intervalId = setInterval(() => {
       if (messages.length === 0) {
         fetchSuggestedQuestions();
@@ -34,12 +186,37 @@ const ChatInterface = () => {
     }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [messages.length]);
+  };
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const loadConversations = async () => {
+    try {
+      const data = await chatService.getAllConversations();
+      setConversations(data.results || data || []);
+    } catch (err) {
+      console.error('Failed to load conversations:', err);
+    }
+  };
+
+  const loadConversationHistory = async (sessionIdToLoad) => {
+    try {
+      const conversation = await chatService.getConversationHistory(sessionIdToLoad);
+      
+      if (conversation && conversation.messages) {
+        const formattedMessages = conversation.messages.map(msg => ({
+          id: msg.id || uuidv4(),
+          type: msg.message_type === 'human' ? 'user' : 'assistant',
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+        }));
+        
+        setMessages(formattedMessages);
+      }
+    } catch (err) {
+      // If conversation doesn't exist yet, that's okay
+      console.log('No previous conversation found, starting fresh');
+      setMessages([]);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,6 +231,27 @@ const ChatInterface = () => {
     }
   };
 
+  const handleNewConversation = () => {
+    const newSessionId = uuidv4();
+    localStorage.setItem('chat_session_id', newSessionId);
+    setSessionId(newSessionId);
+    setMessages([]);
+    setError(null);
+    
+    // Reload conversations list
+    loadConversations();
+  };
+
+  const handleSelectConversation = async (selectedSessionId) => {
+    localStorage.setItem('chat_session_id', selectedSessionId);
+    setSessionId(selectedSessionId);
+    setMessages([]);
+    setError(null);
+    
+    // Load the selected conversation
+    await loadConversationHistory(selectedSessionId);
+  };
+
   const sendMessage = async (messageText = null) => {
     const text = messageText || inputMessage.trim();
     
@@ -62,6 +260,9 @@ const ChatInterface = () => {
     // Clear input immediately
     setInputMessage('');
     setError(null);
+    setCurrentThinking([]);
+    setStreamEvents([]);
+    setStreamingContent('');
 
     // Add user message to chat
     const userMessage = {
@@ -74,37 +275,176 @@ const ChatInterface = () => {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    try {
-      // Send message to backend
-      const response = await chatService.sendMessage(text, sessionId);
-
-      // Add AI response to chat
-      const aiMessage = {
-        id: uuidv4(),
-        type: 'assistant',
-        content: response.response,
-        intent: response.intent,
-        entities: response.entities,
-        suggestedActions: response.suggested_actions,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to send message. Please try again.');
+    if (useStreaming) {
+      // Use TRUE streaming mode - show actual LLM thinking tokens
+      setIsStreaming(true);
+      setCurrentPhase('');
+      setToolInfo(null);
       
-      // Add error message
-      const errorMessage = {
-        id: uuidv4(),
-        type: 'assistant',
-        content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
-        timestamp: new Date(),
-      };
-      
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+      // Track accumulated text in refs (for final message) and clear DOM
+      thinkingRef.current = '';
+      responseRef.current = '';
+      if (thinkingDomRef.current) thinkingDomRef.current.innerHTML = '';
+      if (responseDomRef.current) responseDomRef.current.innerHTML = '';
+      let suggestedActions = [];
+      let thinkingTokenCount = 0;
+      let responseTokenCount = 0;
+
+      try {
+        await chatService.sendMessageStream(text, sessionId, (event) => {
+          switch (event.type) {
+            case 'phase':
+              setCurrentPhase(event.phase);
+              console.log('[SendMessage] Phase:', event.phase);
+              break;
+            
+            case 'thinking':
+              // Accumulate in ref
+              thinkingRef.current += event.token;
+              thinkingTokenCount++;
+              
+              // Update DOM directly (bypasses React batching)
+              if (thinkingDomRef.current) {
+                // Use innerHTML with span for absolute control
+                thinkingDomRef.current.innerHTML = `<span style="color: #c084fc; font-weight: 500; display: block;">${thinkingRef.current}</span>`;
+                
+                if (thinkingTokenCount === 1) {
+                  elementIdRef.current = Math.random();
+                  thinkingDomRef.current.dataset.elementId = elementIdRef.current;
+                  console.log('[SendMessage] 🎯 FIRST TOKEN - Element ID:', elementIdRef.current);
+                  console.log('[SendMessage] 🎯 innerHTML set to:', thinkingDomRef.current.innerHTML.substring(0, 100));
+                }
+                
+                // Check if element changed
+                if (thinkingTokenCount === 50 && thinkingDomRef.current.dataset.elementId != elementIdRef.current) {
+                  console.error('[SendMessage] ⚠️ ELEMENT WAS RECREATED! Original ID:', elementIdRef.current, 'Current:', thinkingDomRef.current.dataset.elementId);
+                }
+                
+                // Debug visibility
+                if (thinkingTokenCount === 100) {
+                  console.log('[SendMessage] 📊 Element check:', {
+                    hasContent: thinkingDomRef.current.innerHTML.length,
+                    isVisible: thinkingDomRef.current.offsetHeight > 0,
+                    display: window.getComputedStyle(thinkingDomRef.current).display,
+                    opacity: window.getComputedStyle(thinkingDomRef.current).opacity
+                  });
+                }
+              } else {
+                console.error('[SendMessage] ❌ DOM ref is NULL at token', thinkingTokenCount);
+              }
+              
+              if (thinkingTokenCount % 10 === 0) {
+                console.log('[SendMessage] ⚡ Token', thinkingTokenCount, '- Text length:', thinkingRef.current.length, 'Preview:', thinkingRef.current.substring(0, 50));
+              }
+              break;
+            
+            case 'thinking_done':
+              console.log('[SendMessage] ✅ Thinking DONE - Final length:', thinkingRef.current.length);
+              break;
+            
+            case 'tool':
+              if (event.action === 'start') {
+                setToolInfo({ tool: event.tool, query: event.query });
+              } else if (event.action === 'result') {
+                setToolInfo(prev => ({ ...prev, result: event.content }));
+              }
+              break;
+            
+            case 'response':
+              // Accumulate in ref
+              responseRef.current += event.token;
+              responseTokenCount++;
+              
+              // Update DOM directly (bypasses React batching)
+              if (responseDomRef.current) {
+                // Use innerHTML with span for absolute control
+                responseDomRef.current.innerHTML = `<span style="color: #ffffff; font-weight: 400; display: block;">${responseRef.current}</span>`;
+              }
+              
+              if (responseTokenCount % 10 === 0) {
+                console.log('[SendMessage] ⚡ Response token', responseTokenCount, '- Length:', responseRef.current.length);
+              }
+              break;
+            
+            case 'done':
+              suggestedActions = event.suggested_actions || [];
+              console.log('[SendMessage] ✅ Response DONE - Final length:', responseRef.current.length);
+              break;
+            
+            case 'error':
+              setError(event.content);
+              break;
+            
+            default:
+              break;
+          }
+        });
+
+        // Add complete AI response to chat using refs
+        const aiMessage = {
+          id: uuidv4(),
+          type: 'assistant',
+          content: responseRef.current,
+          suggestedActions: suggestedActions,
+          thinking: thinkingRef.current,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, aiMessage]);
+        loadConversations();
+
+      } catch (err) {
+        console.error('Streaming error:', err);
+        setError('Streaming failed. Trying regular mode...');
+        setUseStreaming(false);
+      } finally {
+        setIsStreaming(false);
+        setCurrentPhase('');
+        setToolInfo(null);
+        setIsLoading(false);
+      }
+    } else {
+      // Non-streaming mode (fallback)
+      setCurrentThinking([{ type: 'thinking', description: '🤔 Analyzing your question...' }]);
+
+      try {
+        const response = await chatService.sendMessage(text, sessionId);
+
+        if (response.metadata && response.metadata.thinking) {
+          setCurrentThinking(response.metadata.thinking);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const aiMessage = {
+          id: uuidv4(),
+          type: 'assistant',
+          content: response.response,
+          suggestedActions: response.suggested_actions,
+          thinking: response.metadata?.thinking || [],
+          toolsUsed: response.metadata?.tools_used || 0,
+          reasoningSteps: response.metadata?.reasoning_steps || 0,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, aiMessage]);
+        setTimeout(() => setCurrentThinking([]), 1000);
+        loadConversations();
+      } catch (err) {
+        console.error('Error sending message:', err);
+        setError('Failed to send message. Please try again.');
+        
+        const errorMessage = {
+          id: uuidv4(),
+          type: 'assistant',
+          content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
+          timestamp: new Date(),
+        };
+        
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -129,117 +469,163 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <div className="header-logo">
-          <img src="/onedev-logo.svg" alt="One Development" className="logo-image" />
-        </div>
-        <h1>Luna - AI Agent</h1>
-        <p>Ask me anything about One Development</p>
-      </div>
+    <div className="app-container">
+      <Sidebar
+        conversations={conversations}
+        currentSessionId={sessionId}
+        onSelectConversation={handleSelectConversation}
+        onNewConversation={handleNewConversation}
+        isCollapsed={isSidebarCollapsed}
+        onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
 
-      <div className="chat-messages">
-        {messages.length === 0 ? (
-          <div className="welcome-section">
-            <div className="welcome-avatar">
-              <img src="/Luna.png" alt="Luna" className="welcome-avatar-image" />
+      <div className="chat-container">
+        <div className="chat-header">
+          <div className="header-logo">
+            <img src="/onedev-logo.svg" alt="One Development" className="logo-image" />
+          </div>
+          <h1>Luna - AI Agent</h1>
+          <p>Ask me anything about One Development</p>
+        </div>
+
+        <div className="chat-messages">
+          {messages.length === 0 ? (
+            <div className="welcome-section">
+              <div className="welcome-avatar">
+                <img src="/Luna.png" alt="Luna" className="welcome-avatar-image" />
+              </div>
+              <h2>Welcome! I'm Luna 🌙</h2>
+              <p>
+                Your intelligent AI agent for One Development. I'm here to answer your questions about our company, 
+                projects, services, and everything related to One Development. How can I assist you today?
+              </p>
+              
+              <div className="suggested-questions">
+                {suggestedQuestions.map((question, index) => (
+                  <div
+                    key={question.id || index}
+                    className="suggested-question"
+                    onClick={() => handleSuggestedQuestion(question.question)}
+                  >
+                    {question.question}
+                  </div>
+                ))}
+              </div>
             </div>
-            <h2>Welcome! I'm Luna 🌙</h2>
-            <p>
-              Your intelligent AI agent for One Development. I'm here to answer your questions about our company, 
-              projects, services, and everything related to One Development. How can I assist you today?
-            </p>
-            
-            <div className="suggested-questions">
-              {suggestedQuestions.map((question, index) => (
-                <div
-                  key={question.id || index}
-                  className="suggested-question"
-                  onClick={() => handleSuggestedQuestion(question.question)}
-                >
-                  {question.question}
+          ) : (
+            <>
+              {messages.map((message) => (
+                <div key={message.id} className={`message ${message.type}`}>
+                  {message.type === 'assistant' && (
+                    <div className="message-avatar">
+                      <img src="/Luna.png" alt="Luna" className="avatar-image" />
+                    </div>
+                  )}
+                  <div className="message-content">
+                    {/* Show thinking summary for assistant messages */}
+                    {message.type === 'assistant' && message.toolsUsed > 0 && showThinking && (
+                      <div className="message-thinking-badge">
+                        <span className="thinking-badge-icon">🧠</span>
+                        <span className="thinking-badge-text">
+                          {message.reasoningSteps} steps • {message.toolsUsed} tool{message.toolsUsed > 1 ? 's' : ''} used
+                        </span>
+                        {message.thinking && message.thinking.length > 0 && (
+                          <details className="thinking-details">
+                            <summary>View thinking</summary>
+                            <div className="thinking-details-content">
+                              {message.thinking.map((step, idx) => (
+                                <div key={idx} className="thinking-detail-step">
+                                  {step.description || step.type}
+                                  {step.query && <span className="detail-query">: "{step.query}"</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    )}
+                    
+                    {message.type === 'assistant' ? (
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    ) : (
+                      message.content
+                    )}
+                    
+                    {message.suggestedActions && message.suggestedActions.length > 0 && (
+                      <div className="suggested-actions">
+                        {message.suggestedActions.map((action, idx) => (
+                          <button
+                            key={idx}
+                            className="suggested-action-btn"
+                            onClick={() => handleSuggestedAction(action)}
+                          >
+                            {action}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
-            </div>
-          </div>
-        ) : (
-          <>
-            {messages.map((message) => (
-              <div key={message.id} className={`message ${message.type}`}>
-                {message.type === 'assistant' && (
+              
+              {isLoading && (
+                <div className="message assistant">
                   <div className="message-avatar">
                     <img src="/Luna.png" alt="Luna" className="avatar-image" />
                   </div>
-                )}
-                <div className="message-content">
-                  {message.type === 'assistant' ? (
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  ) : (
-                    message.content
-                  )}
-                  
-                  {message.suggestedActions && message.suggestedActions.length > 0 && (
-                    <div className="suggested-actions">
-                      {message.suggestedActions.map((action, idx) => (
-                        <button
-                          key={idx}
-                          className="suggested-action-btn"
-                          onClick={() => handleSuggestedAction(action)}
-                        >
-                          {action}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            
-            {isLoading && (
-              <div className="message assistant">
-                <div className="message-avatar">
-                  <img src="/Luna.png" alt="Luna" className="avatar-image" />
-                </div>
-                <div className="message-content">
-                  <div className="typing-indicator">
-                    <div className="typing-dot"></div>
-                    <div className="typing-dot"></div>
-                    <div className="typing-dot"></div>
+                  <div className="message-content loading-content">
+                    {isStreaming ? (
+                      <ThinkingStream 
+                        thinkingDomRef={thinkingDomRef}
+                        responseDomRef={responseDomRef}
+                        isStreaming={isStreaming}
+                        toolInfo={toolInfo}
+                      />
+                    ) : (
+                      <>
+                        <ThinkingSteps steps={currentThinking} isVisible={showThinking} />
+                        <div className="typing-indicator">
+                          <div className="typing-dot"></div>
+                          <div className="typing-dot"></div>
+                          <div className="typing-dot"></div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
-
-      {error && (
-        <div className="error-message">
-          {error}
+              )}
+            </>
+          )}
+          
+          <div ref={messagesEndRef} />
         </div>
-      )}
 
-      <div className="chat-input-area">
-        <form onSubmit={handleSubmit} className="chat-input-wrapper">
-          <input
-            type="text"
-            className="chat-input"
-            placeholder="Type your question here..."
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            className="send-button"
-            disabled={isLoading || !inputMessage.trim()}
-          >
-            {isLoading ? 'Sending...' : 'Send'}
-          </button>
-        </form>
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
+
+        <div className="chat-input-area">
+          <form onSubmit={handleSubmit} className="chat-input-wrapper">
+            <input
+              type="text"
+              className="chat-input"
+              placeholder="Type your question here..."
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              className="send-button"
+              disabled={isLoading || !inputMessage.trim()}
+            >
+              {isLoading ? 'Sending...' : 'Send'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

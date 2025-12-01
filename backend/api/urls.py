@@ -10,6 +10,7 @@ router.register(r'pdf-documents', views.PDFDocumentViewSet, basename='pdf-docume
 urlpatterns = [
     path('', include(router.urls)),
     path('chat/', views.chat, name='chat'),
+    path('chat/stream/', views.chat_stream, name='chat-stream'),
     path('suggested-questions/', views.get_suggested_questions, name='suggested-questions'),
     path('conversations/<str:session_id>/', views.get_conversation_history, name='conversation-history'),
     path('ingest-data/', views.ingest_data, name='ingest-data'),

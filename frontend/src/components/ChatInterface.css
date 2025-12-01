@@ -134,16 +134,18 @@
 }
 
 .message.user .message-content {
-  background: linear-gradient(135deg, #341a60 0%, #966bfc 100%);
-  color: white;
+  background: rgba(17, 24, 39, 0.02); /* very subtle tint */
+  color: #111827;
   border-bottom-right-radius: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.5); /* soft neutral border */
 }
 
 .message.assistant .message-content {
-  background: white;
+  background: transparent; /* no box; feels inline with context */
   color: #333;
   border-bottom-left-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 /* Markdown styling for assistant messages */
@@ -205,7 +207,20 @@
 }
 
 .suggested-actions {
-  margin-top: 12px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.suggested-actions-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+  margin-bottom: 6px;
+}
+
+.suggested-actions-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -213,19 +228,33 @@
 
 .suggested-action-btn {
   padding: 8px 16px;
-  background: rgba(150, 107, 252, 0.1);
-  border: 1px solid rgba(150, 107, 252, 0.3);
+  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.6);
   border-radius: 20px;
-  color: #966bfc;
+  color: #111827;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .suggested-action-btn:hover {
-  background: rgba(150, 107, 252, 0.2);
-  border-color: rgba(150, 107, 252, 0.5);
-  transform: translateY(-1px);
+  background: #111827;
+  color: #f9fafb;
+  border-color: #111827;
+  transform: translateY(-1px) translateX(1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+}
+
+.suggested-action-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.suggested-action-text {
+  white-space: nowrap;
 }
 
 .welcome-section {
@@ -521,5 +550,387 @@
 .question-rotate-exit {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* ============================================
+   LUNA'S THINKING VISUALIZATION
+   Creative display of Luna's reasoning process
+   ============================================ */
+
+.thinking-container {
+  background: linear-gradient(135deg, rgba(52, 26, 96, 0.05) 0%, rgba(150, 107, 252, 0.08) 100%);
+  border: 1px solid rgba(150, 107, 252, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  animation: thinkingPulse 2s ease-in-out infinite;
+}
+
+@keyframes thinkingPulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(150, 107, 252, 0.1);
+  }
+  50% { 
+    box-shadow: 0 0 20px 5px rgba(150, 107, 252, 0.15);
+  }
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(150, 107, 252, 0.3);
+}
+
+.thinking-brain {
+  font-size: 20px;
+  animation: brainBounce 1s ease-in-out infinite;
+}
+
+@keyframes brainBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.thinking-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #341a60;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.thinking-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thinking-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #333;
+  animation: stepSlideIn 0.4s ease-out backwards;
+  border-left: 3px solid transparent;
+}
+
+@keyframes stepSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.thinking-step.thinking {
+  border-left-color: #966bfc;
+  background: rgba(150, 107, 252, 0.1);
+}
+
+.thinking-step.tool_call {
+  border-left-color: #00c853;
+  background: rgba(0, 200, 83, 0.08);
+}
+
+.thinking-step.tool_result {
+  border-left-color: #2196f3;
+  background: rgba(33, 150, 243, 0.08);
+}
+
+.thinking-step.responding {
+  border-left-color: #ff9800;
+  background: rgba(255, 152, 0, 0.08);
+}
+
+.thinking-step.error {
+  border-left-color: #f44336;
+  background: rgba(244, 67, 54, 0.08);
+}
+
+.step-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.step-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.step-query {
+  display: block;
+  font-weight: 400;
+  font-style: italic;
+  color: #666;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.step-result {
+  color: #2196f3;
+}
+
+/* Message thinking badge */
+.message-thinking-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(52, 26, 96, 0.06) 0%, rgba(150, 107, 252, 0.1) 100%);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  border: 1px solid rgba(150, 107, 252, 0.15);
+}
+
+.thinking-badge-icon {
+  font-size: 14px;
+}
+
+.thinking-badge-text {
+  color: #341a60;
+  font-weight: 500;
+}
+
+.thinking-details {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.thinking-details summary {
+  cursor: pointer;
+  color: #966bfc;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.thinking-details summary:hover {
+  color: #341a60;
+}
+
+.thinking-details-content {
+  margin-top: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  border: 1px dashed rgba(150, 107, 252, 0.2);
+}
+
+.thinking-detail-step {
+  padding: 4px 0;
+  font-size: 12px;
+  color: #555;
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.1);
+}
+
+.thinking-detail-step:last-child {
+  border-bottom: none;
+}
+
+.detail-query {
+  color: #966bfc;
+  font-style: italic;
+}
+
+/* Loading content adjustment */
+.loading-content {
+  min-width: 300px;
+}
+
+/* ============================================
+   STREAMING THINKING DISPLAY
+   Real-time token-by-token visualization (Cursor-like)
+   ============================================ */
+
+/* Cursor-like thinking display inside assistant bubble */
+.thinking-shell {
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  color: #6b7280;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.thinking-shell.collapsed .thinking-body-inline {
+  max-height: 72px; /* about 4 lines */
+  overflow: hidden;
+}
+
+.thinking-shell.expanded .thinking-body-inline {
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: none;        /* Firefox: hide scrollbar */
+  -ms-overflow-style: none;     /* IE/Edge: hide scrollbar */
+}
+
+.thinking-shell.expanded .thinking-body-inline::-webkit-scrollbar {
+  display: none;                /* WebKit: hide scrollbar, still scrollable */
+}
+
+.thinking-header-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.thinking-toggle {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+}
+
+.thinking-title-inline {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: #d1d5db;
+}
+
+.thinking-body-inline {
+  display: flex;
+  flex-direction: column;
+}
+
+.thinking-line-inline {
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.thinking-cursor-inline {
+  display: inline-block;
+  margin-top: 2px;
+  animation: cursorBlinkInline 0.9s steps(1, end) infinite;
+}
+
+@keyframes cursorBlinkInline {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.thinking-summary-line {
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+/* Tool section (kept) */
+.tool-section {
+  margin: 12px 0;
+  padding: 10px;
+  background: rgba(56, 139, 253, 0.1);
+  border-radius: 8px;
+  border-left: 3px solid #58a6ff;
+}
+
+.tool-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.tool-icon {
+  font-size: 14px;
+}
+
+.tool-name {
+  color: #58a6ff;
+  font-weight: 600;
+}
+
+.tool-query {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.tool-result-preview {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #7d8590;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+/* Scrollbar styling */
+.token-stream::-webkit-scrollbar {
+  width: 6px;
+}
+
+.token-stream::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.token-stream::-webkit-scrollbar-thumb {
+  background: rgba(139, 148, 158, 0.3);
+  border-radius: 3px;
+}
+
+.token-stream::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 148, 158, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .thinking-container {
+    padding: 12px;
+  }
+  
+  .thinking-step {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .message-thinking-badge {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+}
+
+/* Blinking cursor animation */
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Typewriter reveal animation */
+.typewriter-text {
+  display: inline-block;
+}
+
+@keyframes reveal {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 1000px;
+    opacity: 1;
+  }
 }
 

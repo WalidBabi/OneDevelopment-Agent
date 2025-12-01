@@ -23,6 +23,84 @@ export const chatService = {
     }
   },
 
+  // Streaming chat - shows Luna's thinking in real-time
+  sendMessageStream: (message, sessionId, onEvent) => {
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+    
+    console.log('[Stream] Starting stream to:', `${baseUrl}/chat/stream/`);
+    
+    return new Promise((resolve, reject) => {
+      fetch(`${baseUrl}/chat/stream/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          session_id: sessionId,
+        }),
+      }).then(response => {
+        console.log('[Stream] Response received, status:', response.status);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let eventCount = 0;
+        
+        function processStream() {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              console.log('[Stream] Complete, total events:', eventCount);
+              resolve();
+              return;
+            }
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  eventCount++;
+                  
+                  // Log first few events and phase changes
+                  if (eventCount <= 5 || data.type === 'phase' || data.type === 'done') {
+                    console.log(`[Stream] Event ${eventCount}:`, data.type, data.phase || data.token?.substring(0, 20) || '');
+                  }
+                  
+                  onEvent(data);
+                  
+                  if (data.type === 'done') {
+                    console.log('[Stream] Done event received');
+                    resolve(data);
+                  }
+                } catch (e) {
+                  console.error('[Stream] Error parsing SSE:', e, line);
+                }
+              }
+            }
+            
+            processStream();
+          }).catch(err => {
+            console.error('[Stream] Read error:', err);
+            reject(err);
+          });
+        }
+        
+        processStream();
+      }).catch(err => {
+        console.error('[Stream] Fetch error:', err);
+        reject(err);
+      });
+    });
+  },
+
   getSuggestedQuestions: async (count = 3) => {
     try {
       const response = await api.get(`/suggested-questions/?count=${count}`);
