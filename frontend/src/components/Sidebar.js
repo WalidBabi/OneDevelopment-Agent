@@ -6,6 +6,7 @@ const Sidebar = ({
   currentSessionId, 
   onSelectConversation, 
   onNewConversation,
+  onDeleteConversation,
   isCollapsed,
   onToggle 
 }) => {
@@ -69,23 +70,45 @@ const Sidebar = ({
               <p>No conversations yet.<br/>Start chatting with Luna!</p>
             </div>
           ) : (
-            conversations.map((conversation) => (
-              <div
-                key={conversation.session_id}
-                className={`conversation-item ${conversation.session_id === currentSessionId ? 'active' : ''}`}
-                onClick={() => onSelectConversation(conversation.session_id)}
-              >
-                <div className="conversation-title">
-                  {getConversationTitle(conversation)}
+            conversations.map((conversation) => {
+              const isActive = conversation.session_id === currentSessionId;
+
+              return (
+                <div
+                  key={conversation.session_id}
+                  className={`conversation-item ${isActive ? 'active' : ''}`}
+                  onClick={() => onSelectConversation(conversation.session_id)}
+                >
+                  <div className="conversation-top">
+                    <div className="conversation-title">
+                      {getConversationTitle(conversation)}
+                    </div>
+                    {typeof onDeleteConversation === 'function' && (
+                      <div className="conversation-actions">
+                        <button
+                          type="button"
+                          className="action-btn delete"
+                          aria-label="Delete conversation"
+                          title="Delete conversation"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onDeleteConversation(conversation.session_id);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="conversation-preview">
+                    {getConversationPreview(conversation)}
+                  </div>
+                  <div className="conversation-date">
+                    {formatDate(conversation.updated_at || conversation.created_at)}
+                  </div>
                 </div>
-                <div className="conversation-preview">
-                  {getConversationPreview(conversation)}
-                </div>
-                <div className="conversation-date">
-                  {formatDate(conversation.updated_at || conversation.created_at)}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

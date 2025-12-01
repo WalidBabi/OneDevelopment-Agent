@@ -57,9 +57,12 @@ const ChatInterface = () => {
   const loadConversations = async () => {
     try {
       const data = await chatService.getAllConversations();
-      setConversations(data.results || data || []);
+      const list = data.results || data || [];
+      setConversations(list);
+      return list;
     } catch (err) {
       console.error('Failed to load conversations:', err);
+      return [];
     }
   };
 
@@ -116,6 +119,34 @@ const ChatInterface = () => {
     
     // Load the selected conversation
     await loadConversationHistory(selectedSessionId);
+  };
+
+  const handleDeleteConversation = async (sessionIdToDelete) => {
+    if (!sessionIdToDelete) return;
+
+    const confirmDelete = window.confirm(
+      'Delete this conversation? This action cannot be undone.'
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await chatService.deleteConversation(sessionIdToDelete);
+
+      const updatedConversations = await loadConversations();
+
+      if (sessionIdToDelete === sessionId) {
+        if (updatedConversations.length > 0) {
+          const nextConversation = updatedConversations[0];
+          await handleSelectConversation(nextConversation.session_id);
+        } else {
+          handleNewConversation();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      setError('Failed to delete conversation. Please try again.');
+    }
   };
 
   const sendMessage = async (messageText = null) => {
@@ -202,6 +233,7 @@ const ChatInterface = () => {
         currentSessionId={sessionId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onDeleteConversation={handleDeleteConversation}
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />

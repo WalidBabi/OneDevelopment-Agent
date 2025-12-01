@@ -90,7 +90,6 @@
   color: white;
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -108,6 +107,18 @@
 .conversation-date {
   color: rgba(255, 255, 255, 0.4);
   font-size: 11px;
+}
+
+.conversation-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.conversation-top .conversation-title {
+  flex: 1;
+  margin-bottom: 0;
 }
 
 .sidebar-toggle {
@@ -161,14 +172,15 @@
 
 .conversation-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
   opacity: 0;
   transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
 .conversation-item:hover .conversation-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .action-btn {
@@ -188,6 +200,7 @@
 
 .action-btn.delete {
   background: rgba(239, 68, 68, 0.2);
+  font-size: 12px;
 }
 
 .action-btn.delete:hover {
