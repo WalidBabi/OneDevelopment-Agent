@@ -141,6 +141,16 @@ export const chatService = {
     }
   },
 
+  deleteAllConversations: async () => {
+    try {
+      const response = await api.delete('/conversations/delete-all/');
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting all conversations:', error);
+      throw error;
+    }
+  },
+
   ingestData: async (source = 'initial') => {
     try {
       const response = await api.post('/ingest-data/', { source });

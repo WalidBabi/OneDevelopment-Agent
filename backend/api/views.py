@@ -487,6 +487,20 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @action(detail=False, methods=['delete'], url_path='delete-all')
+    def delete_all(self, request):
+        """Delete all conversations and their messages"""
+        deleted_count, _ = Conversation.objects.all().delete()
+        if deleted_count == 0:
+            return Response(
+                {'message': 'No conversations to delete'},
+                status=status.HTTP_200_OK
+            )
+        return Response(
+            {'message': 'All conversations deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+
 
 class PDFDocumentViewSet(viewsets.ModelViewSet):
     """
