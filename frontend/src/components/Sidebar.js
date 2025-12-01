@@ -7,6 +7,7 @@ const Sidebar = ({
   onSelectConversation, 
   onNewConversation,
   onDeleteConversation,
+  onDeleteAllConversations,
   isCollapsed,
   onToggle 
 }) => {
@@ -61,6 +62,16 @@ const Sidebar = ({
             <span>➕</span>
             <span>New Conversation</span>
           </button>
+          {conversations.length > 0 && (
+            <button
+              className="delete-all-btn"
+              onClick={onDeleteAllConversations}
+              type="button"
+            >
+              <span>🗑️</span>
+              <span>Delete All</span>
+            </button>
+          )}
         </div>
 
         <div className="conversations-list">

@@ -149,6 +149,27 @@ const ChatInterface = () => {
     }
   };
 
+  const handleDeleteAllConversations = async () => {
+    const confirmDelete = window.confirm(
+      'Delete all conversations? This action cannot be undone.'
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await chatService.deleteAllConversations();
+      setMessages([]);
+      setConversations([]);
+      setError(null);
+
+      // Start a fresh session
+      handleNewConversation();
+    } catch (err) {
+      console.error('Failed to delete all conversations:', err);
+      setError('Failed to delete all conversations. Please try again.');
+    }
+  };
+
   const sendMessage = async (messageText = null) => {
     const text = messageText || inputMessage.trim();
     
@@ -234,6 +255,7 @@ const ChatInterface = () => {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
+        onDeleteAllConversations={handleDeleteAllConversations}
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
