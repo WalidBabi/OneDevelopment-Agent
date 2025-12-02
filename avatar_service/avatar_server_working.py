@@ -37,7 +37,7 @@ app.add_middleware(
 OUTPUT_DIR = Path("./generated_videos")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-AVATAR_IMAGE = Path("./luna_base.png")
+AVATAR_IMAGE = Path("./luna_base.png").resolve()  # Convert to absolute path
 TEMP_AUDIO_DIR = Path("./temp_audio")
 TEMP_AUDIO_DIR.mkdir(exist_ok=True)
 
