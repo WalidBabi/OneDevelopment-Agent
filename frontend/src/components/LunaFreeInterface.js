@@ -1175,6 +1175,13 @@ const LunaAvatarInterface = () => {
         // Try to generate photorealistic avatar video if service is available
         if (avatarServiceAvailable) {
           try {
+            // IMPORTANT: Clear old video and audio FIRST
+            setCurrentVideoUrl(null);
+            // Stop any currently playing speech
+            if (speech.isSpeaking) {
+              window.speechSynthesis?.cancel();
+            }
+            
             // Start progress simulation
             setIsGeneratingVideo(true);
             setVideoProgress(0);
@@ -1187,7 +1194,7 @@ const LunaAvatarInterface = () => {
               });
             }, 600); // Update every 600ms (60 seconds total to reach 95%)
             
-            const avatarResult = await chatService.generateAvatar(responseText);
+            const avatarResult = await chatService.generateAvatar(responseText, null, 'default', 'fast');
             
             // Clear progress interval
             if (progressIntervalRef.current) {
@@ -1199,28 +1206,31 @@ const LunaAvatarInterface = () => {
               console.log('Avatar generation failed, using TTS:', avatarResult.error);
               setIsGeneratingVideo(false);
               setVideoProgress(0);
+              // Only speak if video generation completely failed
               speech.speak(responseText);
             } else {
-              // Got video! Play it
+              // Got video! Play it - DO NOT SPEAK, video has audio!
               console.log('Avatar video generated:', avatarResult.video_url);
               setVideoProgress(100);
+              
+              // Set new video URL - this will play the video with its audio
               setTimeout(() => {
                 setCurrentVideoUrl(avatarResult.video_url);
                 setIsGeneratingVideo(false);
                 setVideoProgress(0);
-              }, 500);
+              }, 100);
               
-              // Also speak the text (video might not have audio yet)
-              speech.speak(responseText);
+              // DO NOT CALL speech.speak() - video has audio!
             }
           } catch (avatarError) {
             console.error('Avatar generation error:', avatarError);
-            // Clear progress and fallback to TTS
+            // Clear progress and fallback to TTS only if error
             if (progressIntervalRef.current) {
               clearInterval(progressIntervalRef.current);
             }
             setIsGeneratingVideo(false);
             setVideoProgress(0);
+            // Only speak if there was an error
             speech.speak(responseText);
           }
         } else {

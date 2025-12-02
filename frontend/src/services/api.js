@@ -172,12 +172,13 @@ export const chatService = {
   },
 
   // Avatar service
-  generateAvatar: async (text, audioUrl = null, voiceId = 'default') => {
+  generateAvatar: async (text, audioUrl = null, voiceId = 'default', quality = 'fast') => {
     try {
       const response = await api.post('/avatar/generate/', {
         text,
         audio_url: audioUrl,
         voice_id: voiceId,
+        quality: quality, // Use 'fast' for 30-40s generation instead of 'high'
       });
       return response.data;
     } catch (error) {

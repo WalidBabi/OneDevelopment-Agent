@@ -612,9 +612,10 @@ def generate_avatar(request):
             json={
                 'text': text,
                 'audio_url': request.data.get('audio_url'),
-                'voice_id': request.data.get('voice_id', 'default')
+                'voice_id': request.data.get('voice_id', 'default'),
+                'quality': request.data.get('quality', 'fast')  # Default to 'fast' for speed
             },
-            timeout=120  # 120 second timeout for video generation (first time is slow)
+            timeout=600  # 10 minute timeout for long video generation
         )
         
         if response.status_code == 200:
