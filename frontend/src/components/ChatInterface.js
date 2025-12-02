@@ -133,6 +133,78 @@ const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
   );
 };
 
+// Cursor-Style Thinking Summary - Shows after completion
+const ThinkingSummary = ({ message }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  if (!message.thinking || message.thinking.length === 0) return null;
+  
+  // Calculate thinking duration
+  const duration = message.thinkingEndedAt && message.thinkingStartedAt
+    ? ((message.thinkingEndedAt - message.thinkingStartedAt) / 1000).toFixed(1)
+    : null;
+  
+  // Extract tool calls
+  const toolCalls = message.thinking.filter(step => step.type === 'tool_call');
+  
+  if (toolCalls.length === 0) return null;
+  
+  // Get friendly tool names
+  const getToolDisplay = (toolName) => {
+    const toolDisplayMap = {
+      'search_knowledge_base': 'Searched knowledge base',
+      'search_uploaded_documents': 'Searched documents',
+      'search_web': 'Searched web',
+      'search_web_for_market_data': 'Searched web (market data)',
+      'search_one_development_website': 'Searched One Development website',
+      'scrape_webpage': 'Scraped webpage',
+      'download_and_read_pdf': 'Read PDF document',
+      'fetch_project_brochure': 'Fetched project brochure',
+      'get_project_details': 'Got project details',
+      'find_and_read_brochure': 'Found and read brochure',
+      'get_dubai_market_context': 'Got Dubai market context',
+      'get_user_context': 'Checked user context',
+      'save_user_information': 'Saved user information',
+      'deep_research': 'Deep research',
+      'analyze_pricing': 'Analyzed pricing',
+      'compare_properties': 'Compared properties',
+    };
+    return toolDisplayMap[toolName] || toolName.replace(/_/g, ' ');
+  };
+  
+  return (
+    <div className="thinking-summary">
+      <div 
+        className="thinking-summary-header"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span className="thinking-summary-label">
+          Thought for {duration}s
+        </span>
+        <button className="thinking-summary-toggle">
+          {isExpanded ? '▼' : '▶'}
+        </button>
+      </div>
+      
+      {isExpanded && (
+        <div className="thinking-summary-content">
+          {toolCalls.map((step, idx) => (
+            <div key={idx} className="thinking-summary-item">
+              <span className="thinking-summary-bullet">•</span>
+              <span className="thinking-summary-text">
+                {getToolDisplay(step.tool)}
+                {step.query && (
+                  <span className="thinking-summary-query"> "{step.query}"</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Legacy Thinking Steps Component (for non-streaming fallback)
 const ThinkingSteps = ({ steps, isVisible }) => {
   if (!isVisible || !steps || steps.length === 0) return null;
@@ -768,27 +840,9 @@ const ChatInterface = () => {
                     </div>
                   )}
                   <div className="message-content">
-                    {/* Show thinking summary for assistant messages */}
-                    {message.type === 'assistant' && message.toolsUsed > 0 && showThinking && (
-                      <div className="message-thinking-badge">
-                        <span className="thinking-badge-icon">🧠</span>
-                        <span className="thinking-badge-text">
-                          {message.reasoningSteps} steps • {message.toolsUsed} tool{message.toolsUsed > 1 ? 's' : ''} used
-                        </span>
-                        {message.thinking && message.thinking.length > 0 && (
-                          <details className="thinking-details">
-                            <summary>View thinking</summary>
-                            <div className="thinking-details-content">
-                              {message.thinking.map((step, idx) => (
-                                <div key={idx} className="thinking-detail-step">
-                                  {step.description || step.type}
-                                  {step.query && <span className="detail-query">: "{step.query}"</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                      </div>
+                    {/* Cursor-Style Thinking Summary */}
+                    {message.type === 'assistant' && !message.isStreaming && showThinking && (
+                      <ThinkingSummary message={message} />
                     )}
                     
                     {/* Cursor-Style Action Display - Shows ONE action at a time */}
