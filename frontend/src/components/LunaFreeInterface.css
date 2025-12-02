@@ -479,7 +479,7 @@
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  overflow: visible;
+  overflow: hidden;
   perspective: 1000px;
 }
 
@@ -487,15 +487,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
   position: relative;
   z-index: 2;
-  border: 3px solid transparent;
-  background: linear-gradient(var(--bg-void), var(--bg-void)) padding-box,
-              linear-gradient(135deg, var(--od-violet), var(--od-gold), var(--od-violet)) border-box;
-  box-shadow: 
-    0 0 30px var(--od-violet-glow),
-    inset 0 0 20px rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  /* Radial gradient mask for smooth fade to background */
+  mask-image: radial-gradient(circle, black 60%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle, black 60%, transparent 100%);
   transition: all 0.4s ease;
 }
 
@@ -504,15 +501,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
   position: relative;
   z-index: 2;
-  border: 3px solid transparent;
-  background: linear-gradient(var(--bg-void), var(--bg-void)) padding-box,
-              linear-gradient(135deg, var(--od-violet), var(--od-gold), var(--od-violet)) border-box;
-  box-shadow: 
-    0 0 30px var(--od-violet-glow),
-    inset 0 0 20px rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  /* Radial gradient mask for smooth fade to background */
+  mask-image: radial-gradient(circle, black 60%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle, black 60%, transparent 100%);
 }
 
 /* Simple mouth overlay to simulate lip movement on the photorealistic avatar */
@@ -1305,8 +1299,69 @@
 }
 
 .avatar-only-section {
-  transform: scale(1.4);
-  margin-bottom: 80px;
+  transform: scale(1.8);
+  margin-bottom: 100px;
+}
+
+/* Make avatar larger in avatar-only mode */
+.avatar-only .luna-avatar {
+  width: 400px;
+  height: 400px;
+}
+
+.avatar-only .avatar-core {
+  width: 280px;
+  height: 280px;
+}
+
+.avatar-only .ring-1 { width: 420px; height: 420px; }
+.avatar-only .ring-2 { width: 360px; height: 360px; }
+.avatar-only .ring-3 { width: 310px; height: 310px; }
+
+/* Video Generation Progress Bar */
+.video-progress-container {
+  margin-top: 20px;
+  width: 320px;
+  text-align: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.video-progress-label {
+  font-size: 13px;
+  color: var(--od-violet-light);
+  margin-bottom: 8px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+
+.video-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(52, 26, 96, 0.4);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-glow);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.video-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--od-violet), var(--od-gold), var(--od-violet));
+  background-size: 200% 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+  animation: progressShimmer 2s linear infinite;
+  box-shadow: 0 0 10px var(--od-violet-glow);
+}
+
+@keyframes progressShimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Video plays smoothly in speaking state */

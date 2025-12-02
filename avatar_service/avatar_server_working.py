@@ -147,13 +147,12 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
             "-s", str(AVATAR_IMAGE),
             "-d", audio_file.name,
             "-o", str(output_path),
-            "--flag_lip_zero", "False",
-            "--flag_eye_retargeting", "False", 
-            "--flag_lip_retargeting", "True",
-            "--flag_stitching", "True",
-            "--flag_relative", "True",
-            "--flag_pasteback", "True",
-            "--flag_do_crop", "True",
+            "--flag-eye-retargeting", 
+            "--flag-lip-retargeting",
+            "--flag-stitching",
+            "--flag-relative-motion",
+            "--flag-pasteback",
+            "--flag-do-crop",
         ]
         
         result = subprocess.run(

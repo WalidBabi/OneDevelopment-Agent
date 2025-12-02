@@ -1100,7 +1100,10 @@ const LunaAvatarInterface = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
   const [avatarServiceAvailable, setAvatarServiceAvailable] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const videoRef = useRef(null);
+  const progressIntervalRef = useRef(null);
 
   const speech = useEnhancedSpeech();
   const recognition = useSpeechRecognition();
@@ -1172,23 +1175,52 @@ const LunaAvatarInterface = () => {
         // Try to generate photorealistic avatar video if service is available
         if (avatarServiceAvailable) {
           try {
+            // Start progress simulation
+            setIsGeneratingVideo(true);
+            setVideoProgress(0);
+            
+            // Simulate progress (since we don't have real progress from backend)
+            progressIntervalRef.current = setInterval(() => {
+              setVideoProgress(prev => {
+                if (prev >= 95) return 95; // Stop at 95% until video arrives
+                return prev + 1;
+              });
+            }, 600); // Update every 600ms (60 seconds total to reach 95%)
+            
             const avatarResult = await chatService.generateAvatar(responseText);
+            
+            // Clear progress interval
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current);
+            }
             
             if (avatarResult.fallback) {
               // Avatar service failed, use TTS fallback
               console.log('Avatar generation failed, using TTS:', avatarResult.error);
+              setIsGeneratingVideo(false);
+              setVideoProgress(0);
               speech.speak(responseText);
             } else {
               // Got video! Play it
               console.log('Avatar video generated:', avatarResult.video_url);
-              setCurrentVideoUrl(avatarResult.video_url);
+              setVideoProgress(100);
+              setTimeout(() => {
+                setCurrentVideoUrl(avatarResult.video_url);
+                setIsGeneratingVideo(false);
+                setVideoProgress(0);
+              }, 500);
               
               // Also speak the text (video might not have audio yet)
               speech.speak(responseText);
             }
           } catch (avatarError) {
             console.error('Avatar generation error:', avatarError);
-            // Fallback to TTS
+            // Clear progress and fallback to TTS
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current);
+            }
+            setIsGeneratingVideo(false);
+            setVideoProgress(0);
             speech.speak(responseText);
           }
         } else {
@@ -1321,6 +1353,21 @@ const LunaAvatarInterface = () => {
             <span className={`status-indicator ${lunaState}`}></span>
             <span className="status-label">{statusLabel}</span>
           </div>
+
+          {/* Video Generation Progress */}
+          {isGeneratingVideo && (
+            <div className="video-progress-container">
+              <div className="video-progress-label">
+                Generating photorealistic video... {Math.round(videoProgress)}%
+              </div>
+              <div className="video-progress-bar">
+                <div 
+                  className="video-progress-fill" 
+                  style={{ width: `${videoProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
 
           {/* Suggested questions under the avatar */}
           {suggestedQuestions && suggestedQuestions.length > 0 && (
