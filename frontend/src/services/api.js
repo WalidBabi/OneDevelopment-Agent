@@ -170,6 +170,38 @@ export const chatService = {
       throw error;
     }
   },
+
+  // Avatar service
+  generateAvatar: async (text, audioUrl = null, voiceId = 'default') => {
+    try {
+      const response = await api.post('/avatar/generate/', {
+        text,
+        audio_url: audioUrl,
+        voice_id: voiceId,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error generating avatar:', error);
+      // Return fallback info if avatar service is unavailable
+      if (error.response?.data?.fallback) {
+        return {
+          fallback: true,
+          error: error.response.data.error,
+        };
+      }
+      throw error;
+    }
+  },
+
+  avatarHealth: async () => {
+    try {
+      const response = await api.get('/avatar/health/');
+      return response.data;
+    } catch (error) {
+      console.error('Error checking avatar health:', error);
+      return { status: 'unavailable' };
+    }
+  },
 };
 
 export default api;

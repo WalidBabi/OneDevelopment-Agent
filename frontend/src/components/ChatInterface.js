@@ -6,56 +6,129 @@ import ReactMarkdown from 'react-markdown';
 import Sidebar from './Sidebar';
 import './ChatInterface.css';
 
-// Cursor-like thinking display for streaming mode
-const MAX_COLLAPSED_THINKING_LINES = 4;
-
-const ThinkingDisplay = ({ thinkingText, phase, startedAt, endedAt }) => {
-  const [expanded, setExpanded] = useState(false);
-
-  // If we have transitioned to responding/done, show a compact summary line
-  if (phase === 'responding' || phase === 'done') {
-    if (!startedAt) return null;
-    const end = endedAt || Date.now();
-    const durationSec = Math.max(1, Math.round((end - startedAt) / 1000));
-    return (
-      <div className="thinking-summary-line">
-        🧠 Thought for {durationSec}s — Generating response...
-      </div>
-    );
+// Cursor-Style Action Display - Shows ONE action at a time with streaming tokens
+// Previous action disappears when new action arrives
+// Action word pulses when waiting for tokens
+const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
+  const [expanded, setExpanded] = useState(true);
+  const contentRef = useRef(null);
+  
+  // Auto-scroll content
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    }
+  }, [thinkingText, currentAction]);
+  
+  // Don't show anything if not active and no action
+  if (!isActive && !currentAction) return null;
+  
+  // Get action display info
+  const getActionDisplay = (action) => {
+    if (!action) return { label: 'PROCESSING', icon: '⚡', color: '#94a3b8' };
+    
+    const actionMap = {
+      'thinking': { label: 'THINKING', icon: '🧠', color: '#a78bfa' },
+      'searching_kb': { label: 'SEARCHING KNOWLEDGE BASE', icon: '🔍', color: '#60a5fa' },
+      'searching_web': { label: 'SEARCHING WEB', icon: '🌐', color: '#34d399' },
+      'searching_docs': { label: 'SEARCHING DOCUMENTS', icon: '📄', color: '#fbbf24' },
+      'reading_pdf': { label: 'READING PDF', icon: '📑', color: '#f472b6' },
+      'fetching_brochure': { label: 'FETCHING BROCHURE', icon: '📋', color: '#fb923c' },
+      'analyzing': { label: 'ANALYZING', icon: '🔬', color: '#a78bfa' },
+      'comparing': { label: 'COMPARING', icon: '⚖️', color: '#38bdf8' },
+      'market_data': { label: 'GETTING MARKET DATA', icon: '📊', color: '#4ade80' },
+      'user_context': { label: 'CHECKING USER CONTEXT', icon: '👤', color: '#c084fc' },
+      'searching': { label: 'SEARCHING', icon: '🔍', color: '#60a5fa' },
+      'responding': { label: 'GENERATING RESPONSE', icon: '✨', color: '#fcd34d' },
+      'tool_result': { label: 'PROCESSING RESULTS', icon: '✅', color: '#22c55e' },
+      'verifying': { label: 'VERIFYING', icon: '🔍', color: '#8b5cf6' },
+      'improving': { label: 'IMPROVING RESPONSE', icon: '✨', color: '#f59e0b' },
+      'done': { label: 'COMPLETE', icon: '✓', color: '#22c55e' },
+      'error': { label: 'ERROR', icon: '❌', color: '#ef4444' },
+    };
+    
+    // Map tool names to action types
+    const toolMap = {
+      'search_knowledge_base': 'searching_kb',
+      'search_uploaded_documents': 'searching_docs',
+      'search_web': 'searching_web',
+      'search_web_for_market_data': 'market_data',
+      'search_one_development_website': 'searching_web',
+      'scrape_webpage': 'searching_web',
+      'download_and_read_pdf': 'reading_pdf',
+      'fetch_project_brochure': 'fetching_brochure',
+      'get_project_details': 'fetching_brochure',
+      'find_and_read_brochure': 'fetching_brochure',
+      'get_dubai_market_context': 'market_data',
+      'get_user_context': 'user_context',
+      'save_user_information': 'user_context',
+      'deep_research': 'analyzing',
+      'analyze_pricing': 'analyzing',
+      'compare_properties': 'comparing',
+      'guide_buyer_journey': 'analyzing',
+    };
+    
+    // Check if it's a tool action
+    if (action.toolName) {
+      const mappedType = toolMap[action.toolName] || 'analyzing';
+      return actionMap[mappedType] || actionMap['analyzing'];
+    }
+    
+    return actionMap[action.type] || { label: action.type?.toUpperCase() || 'PROCESSING', icon: '⚡', color: '#94a3b8' };
+  };
+  
+  // Determine what to show
+  const display = getActionDisplay(currentAction);
+  const hasTokens = (phase === 'thinking' && thinkingText && thinkingText.trim().length > 0);
+  const hasQuery = currentAction?.query;
+  const hasDetail = currentAction?.detail;
+  const isWaiting = !hasTokens && !hasQuery && phase !== 'done';
+  
+  // Parse thinking text into lines
+  const lines = thinkingText ? thinkingText.split('\n').filter(line => line.trim()) : [];
+  const visibleLines = expanded ? lines : lines.slice(-4);
+  
+  // If done, show summary
+  if (phase === 'done' || (!isActive && currentAction?.type === 'done')) {
+    return null; // Hide when done
   }
-
-  if (!thinkingText) return null;
-
-  const lines = thinkingText.split('\n').filter(line => line.trim() !== '');
-  if (lines.length === 0) return null;
-
-  const visibleLines = expanded
-    ? lines
-    : lines.slice(-MAX_COLLAPSED_THINKING_LINES);
-
+  
   return (
-    <div className={`thinking-shell ${expanded ? 'expanded' : 'collapsed'}`}>
-      <div className="thinking-header-inline">
-        <button
-          type="button"
-          className="thinking-toggle"
-          onClick={() => setExpanded(prev => !prev)}
-          aria-expanded={expanded}
-        >
-          {expanded ? '▼' : '▶'}
-        </button>
-        <span className="thinking-title-inline">Thinking</span>
-      </div>
-      <div className="thinking-body-inline">
-        {visibleLines.map((line, idx) => (
-          <div key={idx} className="thinking-line-inline">
-            {line}
-          </div>
-        ))}
-        {phase === 'thinking' && (
-          <span className="thinking-cursor-inline">▌</span>
+    <div className="action-display" style={{ '--action-color': display.color }}>
+      {/* Action Header */}
+      <div className="action-header" onClick={() => setExpanded(!expanded)}>
+        <div className="action-header-left">
+          <span className="action-icon">{display.icon}</span>
+          <span className={`action-label ${isWaiting ? 'pulsing' : ''}`}>
+            {display.label}
+          </span>
+          {isActive && <span className="action-cursor">▌</span>}
+        </div>
+        {lines.length > 4 && (
+          <button className="action-expand-btn" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+            {expanded ? '▼' : '▶'} {lines.length} lines
+          </button>
         )}
       </div>
+      
+      {/* Query if present */}
+      {hasQuery && (
+        <div className="action-query">"{currentAction.query}"</div>
+      )}
+      
+      {/* Detail if present and no tokens */}
+      {hasDetail && !hasTokens && (
+        <div className="action-detail">{currentAction.detail}</div>
+      )}
+      
+      {/* Streaming tokens */}
+      {hasTokens && (
+        <div className="action-content" ref={contentRef}>
+          {visibleLines.map((line, idx) => (
+            <div key={idx} className="action-line">{line}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -127,6 +200,7 @@ const ChatInterface = () => {
   const [useStreaming, setUseStreaming] = useState(true); // Toggle streaming mode
   const [currentPhase, setCurrentPhase] = useState('');
   const [toolInfo, setToolInfo] = useState(null);
+  const [currentAction, setCurrentAction] = useState(null); // Track CURRENT action only (Cursor-style)
   
   // Refs to track accumulated text
   const thinkingRef = useRef('');
@@ -319,10 +393,16 @@ const ChatInterface = () => {
       // Clear accumulators
       thinkingRef.current = '';
       responseRef.current = '';
+      setCurrentAction(null);
+      
       // Create placeholder assistant message we will stream into
       const streamingId = uuidv4();
       const thinkingStartedAt = Date.now();
       streamingMessageIdRef.current = streamingId;
+      
+      // Set initial action
+      setCurrentAction({ type: 'thinking' });
+      
       setMessages(prev => [
         ...prev,
         {
@@ -348,6 +428,8 @@ const ChatInterface = () => {
             case 'phase':
               setCurrentPhase(event.phase);
               if (event.phase === 'thinking') {
+                // Set current action to thinking (replaces previous)
+                setCurrentAction({ type: 'thinking' });
                 flushSync(() => {
                   setMessages(prev =>
                     prev.map(m =>
@@ -358,8 +440,14 @@ const ChatInterface = () => {
                   );
                 });
               }
+              // When searching phase starts
+              if (event.phase === 'searching') {
+                setCurrentAction({ type: 'searching' });
+              }
               // When the model switches to responding, clear the transient thinking text
               if (event.phase === 'responding') {
+                // Set current action to responding (replaces previous)
+                setCurrentAction({ type: 'responding' });
                 const endedAt = Date.now();
                 thinkingRef.current = '';
                 flushSync(() => {
@@ -395,14 +483,83 @@ const ChatInterface = () => {
               break;
             
             case 'thinking_done':
+              // Capture the exact moment thinking completed (before tool execution)
+              flushSync(() => {
+                const thinkingDoneAt = Date.now();
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === streamingMessageIdRef.current
+                      ? { ...m, thinkingEndedAt: m.thinkingEndedAt || thinkingDoneAt }
+                      : m
+                  )
+                );
+              });
               break;
             
             case 'tool':
               if (event.action === 'start') {
+                // Clear thinking text when tool starts
+                thinkingRef.current = '';
+                flushSync(() => {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === streamingMessageIdRef.current
+                        ? { ...m, thinkingStream: '' }
+                        : m
+                    )
+                  );
+                });
+                // Set current action to the tool (replaces previous action)
+                setCurrentAction({ 
+                  toolName: event.tool, 
+                  query: event.query 
+                });
                 setToolInfo({ tool: event.tool, query: event.query });
               } else if (event.action === 'result') {
+                // Show processing results briefly, then it will be replaced by next action
+                setCurrentAction({ type: 'tool_result', detail: 'Processing results...' });
                 setToolInfo(prev => ({ ...prev, result: event.content }));
               }
+              break;
+            
+            case 'verification':
+              // Handle verification results
+              setCurrentAction({ type: 'verifying', detail: `Confidence: ${(event.confidence * 100).toFixed(0)}%` });
+              flushSync(() => {
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === streamingMessageIdRef.current
+                      ? {
+                          ...m,
+                          verification: {
+                            confidence: event.confidence,
+                            level: event.level,
+                            sources: event.sources || [],
+                            issues: event.issues || []
+                          }
+                        }
+                      : m
+                  )
+                );
+              });
+              break;
+            
+            case 'response_improved':
+              // Response was improved after verification
+              responseRef.current = event.content;
+              flushSync(() => {
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === streamingMessageIdRef.current
+                      ? {
+                          ...m,
+                          content: event.content,
+                          responseStream: event.content
+                        }
+                      : m
+                  )
+                );
+              });
               break;
             
             case 'response':
@@ -425,6 +582,8 @@ const ChatInterface = () => {
               break;
             
             case 'done':
+              // Clear the action display when done
+              setCurrentAction({ type: 'done' });
               suggestedActions = event.suggested_actions || [];
               flushSync(() => {
                 const endedAt = Date.now();
@@ -443,6 +602,7 @@ const ChatInterface = () => {
               break;
             
             case 'error':
+              setCurrentAction({ type: 'error', detail: event.content });
               setError(event.content);
               break;
             
@@ -476,6 +636,7 @@ const ChatInterface = () => {
         setIsStreaming(false);
         setCurrentPhase('');
         setToolInfo(null);
+        setCurrentAction(null);
         setIsLoading(false);
       }
     } else {
@@ -628,19 +789,37 @@ const ChatInterface = () => {
                       </div>
                     )}
                     
-                    {/* Live streaming thinking display (Cursor-like) */}
-                    {message.type === 'assistant' && (
-                      <ThinkingDisplay
+                    {/* Cursor-Style Action Display - Shows ONE action at a time */}
+                    {message.type === 'assistant' && message.isStreaming && (
+                      <ActionDisplay
+                        currentAction={currentAction}
                         thinkingText={message.thinkingStream}
-                        phase={
-                          message.thinkingPhase ||
-                          (message.isStreaming
-                            ? (currentPhase || 'thinking')
-                            : (message.thinkingStream ? 'thinking' : 'done'))
-                        }
-                        startedAt={message.thinkingStartedAt}
-                        endedAt={message.thinkingEndedAt}
+                        phase={currentPhase || 'thinking'}
+                        isActive={message.isStreaming}
                       />
+                    )}
+
+                    {/* Verification Badge (if verified) */}
+                    {message.type === 'assistant' && message.verification && !message.isStreaming && (
+                      <div className="verification-badge">
+                        <span className="verification-icon">
+                          {message.verification.level === 'high' ? '✅' : 
+                           message.verification.level === 'medium' ? '✓' : '⚠️'}
+                        </span>
+                        <span className="verification-text">
+                          {message.verification.level === 'high' ? 'Verified' : 
+                           message.verification.level === 'medium' ? 'Verified' : 'General Info'}
+                          {' '}
+                          ({(message.verification.confidence * 100).toFixed(0)}% confidence)
+                        </span>
+                        {message.verification.sources && message.verification.sources.length > 0 && (
+                          <span className="verification-sources">
+                            Sources: {message.verification.sources.map(s => 
+                              s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                            ).join(', ')}
+                          </span>
+                        )}
+                      </div>
                     )}
 
                     {/* Final assistant content (streams in as responseStream updates) */}

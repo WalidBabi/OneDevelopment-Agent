@@ -6,3 +6,186 @@
   justify-content: center;
 }
 
+/* Mode Toggle Button - One Development Style */
+.mode-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid rgba(150, 107, 252, 0.3);
+  background: rgba(52, 26, 96, 0.6);
+  backdrop-filter: blur(15px);
+  cursor: pointer;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  opacity: 0.7;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.mode-toggle:hover {
+  opacity: 1;
+  transform: scale(1.1) rotate(45deg);
+  border-color: rgba(150, 107, 252, 0.6);
+  box-shadow: 
+    0 8px 30px rgba(52, 26, 96, 0.5),
+    0 0 40px rgba(150, 107, 252, 0.3);
+}
+
+/* Mode Selector Overlay */
+.mode-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 5, 16, 0.85);
+  backdrop-filter: blur(10px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: overlayFade 0.3s ease-out;
+}
+
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Mode Dialog - One Development Premium Style */
+.mode-dialog {
+  background: linear-gradient(135deg, #1a0f30 0%, #110820 100%);
+  border: 1px solid rgba(150, 107, 252, 0.3);
+  border-radius: 24px;
+  padding: 36px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 
+    0 25px 80px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(150, 107, 252, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: dialogSlide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes dialogSlide {
+  from { 
+    opacity: 0; 
+    transform: translateY(30px) scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+.mode-dialog h3 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff 0%, #966bfc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.mode-subtitle {
+  margin: 0 0 28px 0;
+  font-size: 14px;
+  color: #A89CC8;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* Mode Choices */
+.mode-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.mode-choice {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 24px;
+  background: rgba(52, 26, 96, 0.3);
+  border: 1px solid rgba(150, 107, 252, 0.15);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  text-align: left;
+  color: #E8E0F8;
+}
+
+.mode-choice:hover {
+  background: rgba(150, 107, 252, 0.15);
+  border-color: rgba(150, 107, 252, 0.5);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 10px 30px rgba(52, 26, 96, 0.4);
+}
+
+.mode-choice.selected {
+  background: linear-gradient(135deg, rgba(150, 107, 252, 0.2), rgba(212, 175, 55, 0.1));
+  border-color: #966bfc;
+  box-shadow: 
+    0 0 30px rgba(150, 107, 252, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.choice-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.choice-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.choice-name {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.choice-desc {
+  font-size: 13px;
+  color: #A89CC8;
+}
+
+.choice-check {
+  font-size: 20px;
+  color: #D4AF37;
+  font-weight: bold;
+  text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+}
+
+/* Close Button */
+.mode-close {
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(150, 107, 252, 0.2);
+  background: rgba(52, 26, 96, 0.3);
+  color: #A89CC8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 0.5px;
+}
+
+.mode-close:hover {
+  background: rgba(150, 107, 252, 0.2);
+  border-color: rgba(150, 107, 252, 0.4);
+  color: #E8E0F8;
+}

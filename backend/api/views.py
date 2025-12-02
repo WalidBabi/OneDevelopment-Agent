@@ -17,6 +17,10 @@ import uuid
 from datetime import datetime
 import random
 import os
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -557,4 +561,130 @@ class PDFDocumentViewSet(viewsets.ModelViewSet):
             'message': 'Reindexing completed',
             'results': results
         }, status=status.HTTP_200_OK)
+
+
+# ============================================================================
+# AVATAR SERVICE INTEGRATION
+# ============================================================================
+
+@api_view(['POST'])
+def generate_avatar(request):
+    """
+    Generate a photorealistic talking avatar video.
+    
+    This endpoint proxies requests to the GPU avatar service running on your laptop.
+    
+    POST /api/avatar/generate/
+    {
+        "text": "Hello, I'm Luna",
+        "audio_url": null,  // optional: pre-generated audio
+        "voice_id": "default"
+    }
+    
+    Response:
+    {
+        "video_url": "https://tunnel-url/videos/uuid.mp4",
+        "video_id": "uuid",
+        "duration": 5.2,
+        "status": "generated"
+    }
+    """
+    avatar_service_url = os.getenv('AVATAR_SERVICE_URL')
+    
+    if not avatar_service_url:
+        return Response({
+            'error': 'Avatar service not configured. Set AVATAR_SERVICE_URL environment variable.',
+            'fallback': True
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    text = request.data.get('text')
+    if not text:
+        return Response({
+            'error': 'Text is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Call the avatar GPU service
+        logger.info(f"Requesting avatar generation for text: {text[:50]}...")
+        
+        response = requests.post(
+            f"{avatar_service_url}/generate",
+            json={
+                'text': text,
+                'audio_url': request.data.get('audio_url'),
+                'voice_id': request.data.get('voice_id', 'default')
+            },
+            timeout=30  # 30 second timeout for video generation
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"Avatar generated successfully: {data.get('video_id')}")
+            return Response(data, status=status.HTTP_200_OK)
+        else:
+            logger.error(f"Avatar service error: {response.status_code} - {response.text}")
+            return Response({
+                'error': 'Avatar generation failed',
+                'details': response.text,
+                'fallback': True
+            }, status=response.status_code)
+            
+    except requests.exceptions.Timeout:
+        logger.error("Avatar service timeout")
+        return Response({
+            'error': 'Avatar generation timed out',
+            'fallback': True
+        }, status=status.HTTP_504_GATEWAY_TIMEOUT)
+        
+    except requests.exceptions.ConnectionError:
+        logger.error("Cannot connect to avatar service")
+        return Response({
+            'error': 'Avatar service unavailable. Make sure the GPU service is running and tunnel is active.',
+            'fallback': True
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in avatar generation: {str(e)}")
+        return Response({
+            'error': f'Avatar generation error: {str(e)}',
+            'fallback': True
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def avatar_health(request):
+    """
+    Check if the avatar GPU service is available and healthy.
+    
+    GET /api/avatar/health/
+    """
+    avatar_service_url = os.getenv('AVATAR_SERVICE_URL')
+    
+    if not avatar_service_url:
+        return Response({
+            'status': 'unavailable',
+            'message': 'Avatar service not configured'
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    try:
+        response = requests.get(f"{avatar_service_url}/health", timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return Response({
+                'status': 'healthy',
+                'service_info': data,
+                'url': avatar_service_url
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'status': 'unhealthy',
+                'message': 'Service responded with error'
+            }, status=response.status_code)
+            
+    except Exception as e:
+        return Response({
+            'status': 'unavailable',
+            'message': str(e)
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 

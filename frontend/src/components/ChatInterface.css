@@ -27,6 +27,37 @@
   text-align: center;
 }
 
+/* Verification Badge Styles */
+.verification-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #166534;
+}
+
+.verification-icon {
+  font-size: 14px;
+}
+
+.verification-text {
+  color: #166534;
+}
+
+.verification-sources {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid #86efac;
+  color: #059669;
+  font-size: 11px;
+}
+
 .header-logo {
   margin-bottom: 12px;
 }
@@ -931,6 +962,167 @@
   to {
     max-height: 1000px;
     opacity: 1;
+  }
+}
+
+/* ============================================
+   CURSOR-STYLE ACTION DISPLAY
+   Shows ONE action at a time with pulsing animation
+   ============================================ */
+
+.action-display {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid var(--action-color, rgba(150, 107, 252, 0.3));
+  border-left: 3px solid var(--action-color, #a78bfa);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  animation: actionFadeIn 0.3s ease-out;
+}
+
+@keyframes actionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.action-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-icon {
+  font-size: 16px;
+}
+
+.action-label {
+  color: var(--action-color, #e2e8f0);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Pulsing animation when waiting for tokens */
+.action-label.pulsing {
+  animation: labelPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes labelPulse {
+  0%, 100% { 
+    opacity: 1;
+  }
+  50% { 
+    opacity: 0.4;
+  }
+}
+
+.action-cursor {
+  color: var(--action-color, #a78bfa);
+  font-size: 14px;
+  animation: cursorBlinkAction 0.8s step-end infinite;
+}
+
+@keyframes cursorBlinkAction {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.action-expand-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.action-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.action-query {
+  color: #60a5fa;
+  font-size: 12px;
+  font-style: italic;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 4px;
+}
+
+.action-detail {
+  color: #94a3b8;
+  font-size: 11px;
+  margin-top: 6px;
+  animation: detailPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes detailPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.4; }
+}
+
+.action-content {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 107, 252, 0.3) transparent;
+}
+
+.action-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.action-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.action-content::-webkit-scrollbar-thumb {
+  background: rgba(150, 107, 252, 0.4);
+  border-radius: 2px;
+}
+
+.action-line {
+  color: #a1a1aa;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .action-display {
+    padding: 10px 12px;
+  }
+  
+  .action-label {
+    font-size: 11px;
+  }
+  
+  .action-content {
+    max-height: 150px;
   }
 }
 

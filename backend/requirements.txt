@@ -25,6 +25,7 @@ sentence-transformers==2.2.2
 celery==5.3.4
 redis==5.0.1
 python-linkedin-v2==0.9.1
+duckduckgo-search==6.2.1
 
 # PDF processing
 PyPDF2==3.0.1

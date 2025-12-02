@@ -15,5 +15,8 @@ urlpatterns = [
     path('conversations/<str:session_id>/', views.get_conversation_history, name='conversation-history'),
     path('ingest-data/', views.ingest_data, name='ingest-data'),
     path('health/', views.health_check, name='health'),
+    # Avatar service endpoints
+    path('avatar/generate/', views.generate_avatar, name='generate-avatar'),
+    path('avatar/health/', views.avatar_health, name='avatar-health'),
 ]
 
