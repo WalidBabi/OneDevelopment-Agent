@@ -363,3 +363,5 @@ docker-compose restart backend
 
 The system will automatically use the GPU service when available and gracefully fall back to TTS when it's not.
 
+
+

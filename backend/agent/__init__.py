@@ -1,19 +1,23 @@
 # Agent app - Luna AI Assistant for One Development
 """
-Luna ReAct Agent Module
+Luna DeepAgent Module
 
-This module provides the Luna AI assistant with Cursor-like reasoning capabilities.
+This module provides the Luna AI assistant using DeepAgents - a standalone library
+built on LangGraph that provides a cleaner, more streamlined interface for building
+ReAct agents with built-in streaming, checkpointing, and human-in-the-loop capabilities.
+
 Luna uses the ReAct (Reasoning + Acting) pattern to dynamically decide which tools
 to use based on user queries.
 
 Key Components:
-- luna_react_agent.py: Main ReAct agent with reasoning loop
+- luna_deepagent.py: Main Luna agent using DeepAgents library (NEW!)
 - tools.py: All tools Luna can use (search, memory, web, etc.)
 - subagents.py: Specialized tools for deep research and analysis
+- luna_react_agent.py: Legacy ReAct implementation (kept for reference)
 - langgraph_agent.py: Legacy fixed-pipeline agent (kept for compatibility)
 
 Usage:
-    from agent.luna_react_agent import get_luna_agent, chat_with_luna
+    from agent import get_luna_agent, chat_with_luna
     
     # Get the singleton Luna instance
     luna = get_luna_agent()
@@ -29,8 +33,9 @@ Usage:
     response = chat_with_luna("What properties do you have?")
 """
 
-from agent.luna_react_agent import (
-    LunaReActAgent,
+# NEW: Import from DeepAgent implementation
+from agent.luna_deepagent import (
+    LunaDeepAgent,
     get_luna_agent,
     chat_with_luna,
 )
@@ -43,7 +48,7 @@ from agent.tools import (
 )
 
 __all__ = [
-    'LunaReActAgent',
+    'LunaDeepAgent',
     'get_luna_agent',
     'chat_with_luna',
     'get_all_tools',
@@ -52,4 +57,4 @@ __all__ = [
     'search_web_for_market_data',
 ]
 
-__version__ = '2.0.0'
+__version__ = '3.0.0'  # Major version bump for DeepAgents implementation

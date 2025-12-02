@@ -10,7 +10,7 @@ from .serializers import (
     PDFDocumentSerializer
 )
 from agent.langgraph_agent import OneDevelopmentAgent
-from agent.luna_react_agent import LunaReActAgent, get_luna_agent
+from agent import get_luna_agent  # Now using DeepAgent implementation
 from agent.data_ingestor import OneDevelopmentDataIngestor
 from agent.pdf_processor import PDFProcessor
 import uuid
@@ -427,7 +427,7 @@ def health_check(request):
             'name': 'Luna',
             'tools_available': tools_count
         },
-        'version': '2.0.0'  # ReAct version
+        'version': '3.0.0'  # DeepAgent implementation
     }, status=status.HTTP_200_OK)
 
 

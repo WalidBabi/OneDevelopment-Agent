@@ -971,12 +971,12 @@
    ============================================ */
 
 .action-display {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 1px solid var(--action-color, rgba(150, 107, 252, 0.3));
-  border-left: 3px solid var(--action-color, #a78bfa);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-left: none;
+  border-radius: 0;
+  margin-bottom: 8px;
+  padding: 4px 0;
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   animation: actionFadeIn 0.3s ease-out;
 }
@@ -1009,11 +1009,11 @@
 }
 
 .action-label {
-  color: var(--action-color, #e2e8f0);
+  color: var(--action-color, #6b7280);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 /* Pulsing animation when waiting for tokens */
@@ -1031,7 +1031,7 @@
 }
 
 .action-cursor {
-  color: var(--action-color, #a78bfa);
+  color: var(--action-color, #9333ea);
   font-size: 14px;
   animation: cursorBlinkAction 0.8s step-end infinite;
 }
@@ -1042,10 +1042,10 @@
 }
 
 .action-expand-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: 1px solid #d1d5db;
   border-radius: 4px;
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 10px;
   padding: 4px 8px;
   cursor: pointer;
@@ -1054,24 +1054,25 @@
 }
 
 .action-expand-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  background: rgba(0, 0, 0, 0.03);
+  color: #374151;
+  border-color: #9ca3af;
 }
 
 .action-query {
-  color: #60a5fa;
+  color: #4b5563;
   font-size: 12px;
   font-style: italic;
-  margin-top: 8px;
-  padding: 6px 10px;
-  background: rgba(96, 165, 250, 0.1);
-  border-radius: 4px;
+  margin-top: 4px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .action-detail {
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 11px;
-  margin-top: 6px;
+  margin-top: 4px;
   animation: detailPulse 1.5s ease-in-out infinite;
 }
 
@@ -1081,40 +1082,40 @@
 }
 
 .action-content {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
+  margin-top: 6px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
   max-height: 200px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(150, 107, 252, 0.3) transparent;
+  scrollbar-width: none; /* Firefox - hide scrollbar */
+  -ms-overflow-style: none; /* IE and Edge - hide scrollbar */
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
 .action-content::-webkit-scrollbar {
-  width: 4px;
+  display: none;
 }
 
 .action-content::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
 }
 
 .action-content::-webkit-scrollbar-thumb {
-  background: rgba(150, 107, 252, 0.4);
-  border-radius: 2px;
+  display: none;
 }
 
 .action-line {
-  color: #a1a1aa;
+  color: #6b7280;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
   padding: 2px 0;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .action-display {
-    padding: 10px 12px;
+    padding: 4px 0;
   }
   
   .action-label {

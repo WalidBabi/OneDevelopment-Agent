@@ -636,3 +636,5 @@ For more questions, visit www.oneuae.com or contact our team.
             self.stdout.write(self.style.WARNING('  ⚠️ duckduckgo-search not installed, skipping web search'))
             return 0
 
+
+

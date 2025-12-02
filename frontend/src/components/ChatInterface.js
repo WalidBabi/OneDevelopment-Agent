@@ -23,6 +23,11 @@ const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
   // Don't show anything if not active and no action
   if (!isActive && !currentAction) return null;
   
+  // Hide immediately if phase is done
+  if (phase === 'done' || currentAction?.type === 'done') {
+    return null;
+  }
+  
   // Get action display info
   const getActionDisplay = (action) => {
     if (!action) return { label: 'PROCESSING', icon: '⚡', color: '#94a3b8' };
@@ -87,11 +92,6 @@ const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
   // Parse thinking text into lines
   const lines = thinkingText ? thinkingText.split('\n').filter(line => line.trim()) : [];
   const visibleLines = expanded ? lines : lines.slice(-4);
-  
-  // If done, show summary
-  if (phase === 'done' || (!isActive && currentAction?.type === 'done')) {
-    return null; // Hide when done
-  }
   
   return (
     <div className="action-display" style={{ '--action-color': display.color }}>
@@ -583,7 +583,9 @@ const ChatInterface = () => {
             
             case 'done':
               // Clear the action display when done
-              setCurrentAction({ type: 'done' });
+              setCurrentPhase('done');
+              setCurrentAction(null); // Clear action completely
+              setToolInfo(null); // Clear tool info
               suggestedActions = event.suggested_actions || [];
               flushSync(() => {
                 const endedAt = Date.now();
