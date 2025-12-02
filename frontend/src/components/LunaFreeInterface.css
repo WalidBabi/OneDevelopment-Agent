@@ -1374,6 +1374,66 @@
 }
 
 /* ===========================================
+   REPLAY BUTTON
+   =========================================== */
+
+.replay-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, 
+    rgba(212, 175, 55, 0.15) 0%, 
+    rgba(212, 175, 55, 0.08) 100%);
+  border: 1px solid var(--od-gold);
+  border-radius: 50px;
+  color: var(--od-gold);
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    0 0 20px rgba(212, 175, 55, 0.1),
+    inset 0 0 10px rgba(212, 175, 55, 0.05);
+  animation: fadeIn 0.4s ease-out;
+}
+
+.replay-button:hover {
+  background: linear-gradient(135deg, 
+    rgba(212, 175, 55, 0.25) 0%, 
+    rgba(212, 175, 55, 0.15) 100%);
+  box-shadow: 
+    0 0 30px rgba(212, 175, 55, 0.2),
+    0 0 50px rgba(212, 175, 55, 0.1),
+    inset 0 0 15px rgba(212, 175, 55, 0.1);
+  transform: translateY(-2px);
+}
+
+.replay-button:active {
+  transform: translateY(0);
+}
+
+.replay-icon {
+  width: 16px;
+  height: 16px;
+  stroke: var(--od-gold);
+}
+
+.replay-button:hover .replay-icon {
+  animation: playPulse 0.6s ease-in-out infinite;
+}
+
+@keyframes playPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* ===========================================
    RESPONSIVE DESIGN
    =========================================== */
 

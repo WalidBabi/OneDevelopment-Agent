@@ -1099,6 +1099,8 @@ const LunaAvatarInterface = () => {
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
+  const [lastVideoUrl, setLastVideoUrl] = useState(null); // Store last video for replay
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [avatarServiceAvailable, setAvatarServiceAvailable] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
@@ -1149,16 +1151,16 @@ const LunaAvatarInterface = () => {
 
   // Track Luna's high-level state
   useEffect(() => {
-    if (speech.isSpeaking) {
+    if (isVideoPlaying || speech.isSpeaking) {
       setLunaState('speaking');
     } else if (recognition.isListening) {
       setLunaState('listening');
-    } else if (isProcessing) {
+    } else if (isProcessing || isGeneratingVideo) {
       setLunaState('thinking');
     } else {
       setLunaState('idle');
     }
-  }, [speech.isSpeaking, recognition.isListening, isProcessing]);
+  }, [speech.isSpeaking, recognition.isListening, isProcessing, isVideoPlaying, isGeneratingVideo]);
 
   const sendMessage = useCallback(
     async (messageText) => {
@@ -1213,8 +1215,9 @@ const LunaAvatarInterface = () => {
               console.log('Avatar video generated:', avatarResult.video_url);
               setVideoProgress(100);
               
-              // Set new video URL - this will play the video with its audio
+              // Store video URL for replay and set as current
               setTimeout(() => {
+                setLastVideoUrl(avatarResult.video_url); // Save for replay
                 setCurrentVideoUrl(avatarResult.video_url);
                 setIsGeneratingVideo(false);
                 setVideoProgress(0);
@@ -1280,10 +1283,36 @@ const LunaAvatarInterface = () => {
     sendMessage(q);
   };
 
+  // Replay the last video answer
+  const handleReplay = () => {
+    if (!lastVideoUrl) return;
+    
+    // Stop any ongoing processes
+    if (speech.isSpeaking) speech.stop();
+    if (recognition.isListening) recognition.stopListening();
+    
+    // Set video URL to replay
+    setCurrentVideoUrl(lastVideoUrl);
+    setIsVideoPlaying(true);
+    
+    // Force video to play from start
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(err => {
+          console.error('Replay error:', err);
+          setIsVideoPlaying(false);
+        });
+      }
+    }, 50);
+  };
+
   const statusLabel = (() => {
     if (!recognition.isSupported) return 'Voice not supported in this browser';
     if (lunaState === 'listening') return 'Listening...';
+    if (isVideoPlaying || currentVideoUrl) return 'Playing response...';
     if (lunaState === 'speaking') return 'Answering...';
+    if (isGeneratingVideo) return 'Generating video...';
     if (lunaState === 'thinking') return 'Thinking...';
     return 'Tap on Luna and speak';
   })();
@@ -1319,9 +1348,20 @@ const LunaAvatarInterface = () => {
                   autoPlay
                   loop={false}
                   muted={false}
-                  onEnded={() => setCurrentVideoUrl(null)}
+                  playsInline
+                  onPlay={() => {
+                    console.log('Video started playing');
+                    setIsVideoPlaying(true);
+                  }}
+                  onEnded={() => {
+                    console.log('Video ended');
+                    setIsVideoPlaying(false);
+                    setCurrentVideoUrl(null);
+                  }}
+                  onPause={() => setIsVideoPlaying(false)}
                   onError={(e) => {
                     console.error('Video playback error:', e);
+                    setIsVideoPlaying(false);
                     setCurrentVideoUrl(null);
                   }}
                 />
@@ -1363,6 +1403,28 @@ const LunaAvatarInterface = () => {
             <span className={`status-indicator ${lunaState}`}></span>
             <span className="status-label">{statusLabel}</span>
           </div>
+
+          {/* Replay Button - shows when there's a previous answer and not currently playing */}
+          {lastVideoUrl && !currentVideoUrl && !isGeneratingVideo && !isProcessing && (
+            <button 
+              className="replay-button"
+              onClick={handleReplay}
+              title="Replay last answer"
+            >
+              <svg 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+                className="replay-icon"
+              >
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <span>Replay Answer</span>
+            </button>
+          )}
 
           {/* Video Generation Progress */}
           {isGeneratingVideo && (
