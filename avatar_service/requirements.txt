@@ -30,14 +30,17 @@ numpy==1.24.3
 scipy==1.11.4
 requests==2.31.0
 
-# Optional: For TTS if you want to generate audio locally
-# TTS==0.20.0
+# Text-to-Speech (Multiple engines for best quality)
+edge-tts==6.1.10          # Microsoft Neural Voices (RECOMMENDED - Best quality/speed)
+gTTS==2.5.1               # Google TTS (Fallback)
+# piper-tts==1.2.0        # Fast offline TTS (optional)
+# TTS==0.21.3             # Coqui TTS for voice cloning (optional, requires GPU)
 
 # LivePortrait dependencies (add when you integrate the actual model)
 # These are placeholders - actual requirements depend on which model you choose:
-# - LivePortrait: https://github.com/KwaiVGI/LivePortrait
-# - SadTalker: https://github.com/OpenTalker/SadTalker
-# - Wav2Lip: https://github.com/Rudrabha/Wav2Lip
+# - LivePortrait: https://github.com/KwaiVGI/LivePortrait (video-to-video only)
+# - SadTalker: https://github.com/OpenTalker/SadTalker (RECOMMENDED for audio-to-video)
+# - Wav2Lip: https://github.com/Rudrabha/Wav2Lip (lip-sync from audio)
 
 
 

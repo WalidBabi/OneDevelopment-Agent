@@ -138,14 +138,44 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
         tts.save(audio_file.name)
         logger.info(f"Audio generated: {audio_file.name}")
         
-        # Step 2: Run LivePortrait via subprocess
+        # Step 2: Convert audio to video (LivePortrait needs video input, not just audio)
+        # Create a simple video from audio with a static frame
+        driving_video = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4", dir=str(TEMP_AUDIO_DIR))
+        
+        # Use FFmpeg to create a video from the audio with the avatar image
+        # This creates a video where the image is displayed for the duration of the audio
+        ffmpeg_cmd = [
+            'ffmpeg',
+            '-loop', '1',  # Loop the image
+            '-i', str(AVATAR_IMAGE),  # Input image
+            '-i', audio_file.name,  # Input audio
+            '-c:v', 'libx264',  # Video codec
+            '-tune', 'stillimage',  # Optimize for still image
+            '-c:a', 'aac',  # Audio codec
+            '-b:a', '192k',  # Audio bitrate
+            '-pix_fmt', 'yuv420p',  # Pixel format for compatibility
+            '-shortest',  # End when shortest input ends (audio)
+            '-y',  # Overwrite output file
+            driving_video.name
+        ]
+        
+        logger.info("Converting audio to video...")
+        ffmpeg_result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        
+        if ffmpeg_result.returncode != 0:
+            logger.error(f"FFmpeg error: {ffmpeg_result.stderr}")
+            raise Exception(f"FFmpeg failed: {ffmpeg_result.stderr}")
+        
+        logger.info(f"Driving video created: {driving_video.name}")
+        
+        # Step 3: Run LivePortrait via subprocess
         logger.info("Running LivePortrait...")
         
         cmd = [
             sys.executable,  # Python executable
             str(LIVEPORTRAIT_INFERENCE),
             "-s", str(AVATAR_IMAGE),
-            "-d", audio_file.name,
+            "-d", driving_video.name,  # Use video instead of audio
             "-o", str(output_path),
             "--flag-eye-retargeting", 
             "--flag-lip-retargeting",
@@ -169,8 +199,9 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
         
         logger.info("LivePortrait completed successfully")
         
-        # Clean up temp audio
+        # Clean up temp files
         os.unlink(audio_file.name)
+        os.unlink(driving_video.name)
         
         # Get video duration
         import cv2
