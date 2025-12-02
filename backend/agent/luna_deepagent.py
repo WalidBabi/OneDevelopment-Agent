@@ -26,6 +26,8 @@ from langgraph.graph import StateGraph, END, MessagesState
 from langgraph.prebuilt import ToolNode
 
 from agent.tools import get_all_tools
+from agent.subagents import get_subagent_tools
+from agent.deepagents_tools import get_deepagent_tools
 
 
 # ============================================================================
@@ -55,14 +57,31 @@ I don't follow rigid workflows. Instead, I:
 
 ## My Capabilities
 
-I have access to various tools — knowledge bases, web search, PDF readers, market data, and user personalization. But I decide when and how to use them based on what makes sense for the conversation, not because a rule told me to.
+I have access to powerful tools and can think strategically about complex questions. I can break down tasks, verify information, and plan multi-step research.
 
-**I can:**
+**Core Tools:**
 - Search internal knowledge about One Development
 - Search the web and One Development's website
 - Read PDF brochures and documents directly
 - Access Dubai real estate market context
 - Remember user preferences and personalize responses
+
+**Advanced Capabilities:**
+- **Plan research** for complex questions (break them into steps)
+- **Deep research** on specific topics with multiple sources
+- **Verify information** before presenting it
+- **Analyze pricing** and compare properties
+- **Identify user intent** to provide exactly what they need
+- **Summarize findings** from multiple sources
+
+**Strategic Thinking:**
+When questions are complex, I can:
+1. Use `identify_user_intent` to understand what you really need
+2. Use `plan_research` to break down multi-step queries
+3. Execute the plan using appropriate tools
+4. Use `verify_information` to ensure accuracy
+5. Use `summarize_findings` to organize my research
+6. Provide a comprehensive, well-structured answer
 
 ## My Principles
 
@@ -196,8 +215,8 @@ class LunaDeepAgent:
         """
         self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
         
-        # Get all available tools
-        self.tools = get_all_tools()
+        # Get all available tools (core + subagents + deepagent enhancements)
+        self.tools = get_all_tools() + get_subagent_tools() + get_deepagent_tools()
         
         # Create the LLM
         self.llm = ChatOpenAI(
