@@ -351,20 +351,21 @@ const useEnhancedSpeech = () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        // Revoke the blob URL to free memory
-        URL.revokeObjectURL(audioUrl);
+        // Revoke the blob URL after a delay to ensure it's fully played
+        setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
         onEnd?.();
       };
       
       audio.onerror = (event) => {
-        console.error('Audio playback error:', event);
+        console.error('Audio playback error:', event, audio.error);
         setIsSpeaking(false);
         setAmplitude(0);
         setMouthOpen(0);
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        URL.revokeObjectURL(audioUrl);
+        // Revoke the blob URL after a delay
+        setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
         onEnd?.();
       };
       
@@ -378,12 +379,12 @@ const useEnhancedSpeech = () => {
         await audio.play();
       } catch (playError) {
         // Autoplay blocked - this happens on first interaction
-        if (playError.name === 'NotAllowedError') {
-          console.log('⚠️ Autoplay blocked - waiting for user interaction');
-          // Audio will play on next user interaction (mic click, suggestion click, etc)
-          // For now, use browser TTS as immediate fallback
+        if (playError.name === 'NotAllowedError' || playError.name === 'NotSupportedError') {
+          console.log('⚠️ Autoplay blocked - trying browser TTS fallback');
+          console.error('Play error details:', playError);
+          
+          // Don't revoke URL immediately - might be needed later
           setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
           
           if (window.speechSynthesis) {
             const utterance = new SpeechSynthesisUtterance(text);
@@ -391,16 +392,23 @@ const useEnhancedSpeech = () => {
             utterance.pitch = 1.0;
             utterance.onend = () => {
               setIsSpeaking(false);
+              setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
               onEnd?.();
             };
             utterance.onerror = () => {
               setIsSpeaking(false);
+              setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
               onEnd?.();
             };
             utterance.onstart = () => setIsSpeaking(true);
             window.speechSynthesis.speak(utterance);
+          } else {
+            setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
+            onEnd?.();
           }
         } else {
+          console.error('Unexpected play error:', playError);
+          setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
           throw playError;
         }
       }
@@ -1641,7 +1649,15 @@ const LunaAvatarInterface = () => {
               setIsGeneratingVideo(false);
               setVideoProgress(0);
               // Only speak if video generation completely failed
-              speech.speak(responseText, null, LUNA_VOICE);
+              speech.speak(responseText, () => {
+                // After TTS ends, restart listening
+                console.log('TTS ended, restarting listening...');
+                setTimeout(() => {
+                  if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
+                    recognition.startListening();
+                  }
+                }, 500);
+              }, LUNA_VOICE);
             } else {
               // Got video! Play it - DO NOT SPEAK, video has audio!
               console.log('Avatar video generated:', avatarResult.video_url);
@@ -1666,16 +1682,40 @@ const LunaAvatarInterface = () => {
             setIsGeneratingVideo(false);
             setVideoProgress(0);
             // Only speak if there was an error
-            speech.speak(responseText, null, LUNA_VOICE);
+            speech.speak(responseText, () => {
+              // After TTS ends, restart listening
+              console.log('TTS ended (error case), restarting listening...');
+              setTimeout(() => {
+                if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
+                  recognition.startListening();
+                }
+              }, 500);
+            }, LUNA_VOICE);
           }
         } else {
           // Avatar service not available, use TTS
           setLastResponseText(responseText); // Save for replay
-          speech.speak(responseText, null, LUNA_VOICE);
+          speech.speak(responseText, () => {
+            // After TTS ends, restart listening
+            console.log('TTS ended (fallback), restarting listening...');
+            setTimeout(() => {
+              if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
+                recognition.startListening();
+              }
+            }, 500);
+          }, LUNA_VOICE);
         }
       } catch (err) {
         console.error('Avatar interface error:', err);
-        speech.speak("I'm having trouble connecting right now. Please try again in a moment.", null, LUNA_VOICE);
+        speech.speak("I'm having trouble connecting right now. Please try again in a moment.", () => {
+          // After TTS ends, restart listening
+          console.log('TTS ended (connection error), restarting listening...');
+          setTimeout(() => {
+            if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
+              recognition.startListening();
+            }
+          }, 500);
+        }, LUNA_VOICE);
       } finally {
         setIsProcessing(false);
       }
@@ -1880,7 +1920,7 @@ const LunaAvatarInterface = () => {
                   onPause={() => {
                     console.log('Video paused');
                   }}
-                  onError((e) => {
+                  onError={(e) => {
                     console.error('Video playback error:', e);
                     setIsVideoPlaying(false);
                     setCurrentVideoUrl(null);
