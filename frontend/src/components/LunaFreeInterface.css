@@ -708,13 +708,15 @@
   pointer-events: none;
 }
 
-/* Photorealistic avatar video */
+/* Photorealistic avatar video - overlays on static image */
 .avatar-video {
   width: 100%;
   height: auto;
   object-fit: contain;
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
   border-radius: 0;
   /* No mask needed - video should blend naturally */
 }
@@ -754,19 +756,13 @@
   filter: blur(8px);
 }
 
-/* Enhanced speaking state - avatar pulses with speech */
+/* Enhanced speaking state - NO pulsing gold animation when video is playing */
 .luna-avatar.speaking .avatar-core {
-  animation: speakingPulse 0.15s ease-in-out infinite alternate;
+  /* Removed animation to let video play naturally */
+  animation: none;
 }
 
-@keyframes speakingPulse {
-  0% { 
-    filter: brightness(1) drop-shadow(0 0 10px rgba(212, 175, 55, 0.5)); 
-  }
-  100% { 
-    filter: brightness(1.05) drop-shadow(0 0 20px rgba(212, 175, 55, 0.8)); 
-  }
-}
+/* Removed: speakingPulse animation with gold glow */
 
 /* Ring glow syncs with speech */
 .luna-avatar.speaking .ring-1 {
@@ -1542,16 +1538,133 @@
 .avatar-only .avatar-only-status {
   position: relative;
   z-index: 100;
-  margin-top: -30px;
-  padding-bottom: 40px;
-  backdrop-filter: blur(10px);
-  background: linear-gradient(to top, rgba(10, 5, 16, 0.95) 0%, rgba(10, 5, 16, 0.7) 50%, transparent 100%);
-  padding-top: 50px;
+  margin-top: -20px;
+  padding-bottom: 30px;
+  padding-top: 30px;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  min-height: 80px;
+}
+
+/* Hide default status elements in avatar-only mode */
+.avatar-only .status-indicator,
+.avatar-only .status-label {
+  display: none !important;
+}
+
+/* Inline waveform */
+.voice-waveform-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Thinking indicator with animated dots */
+.thinking-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.thinking-dots span {
+  width: 12px;
+  height: 12px;
+  background: var(--od-violet);
+  border-radius: 50%;
+  animation: thinkingBounce 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes thinkingBounce {
+  0%, 80%, 100% { 
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% { 
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 20px var(--od-violet-glow);
+  }
+}
+
+.thinking-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Speaking waves indicator */
+.speaking-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.speaking-waves {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+}
+
+.speaking-waves span {
+  width: 4px;
+  background: linear-gradient(to top, var(--od-gold), var(--od-violet));
+  border-radius: 4px;
+  animation: speakingWave 0.8s ease-in-out infinite;
+}
+
+.speaking-waves span:nth-child(1) { height: 20px; animation-delay: 0s; }
+.speaking-waves span:nth-child(2) { height: 30px; animation-delay: 0.1s; }
+.speaking-waves span:nth-child(3) { height: 40px; animation-delay: 0.2s; }
+.speaking-waves span:nth-child(4) { height: 30px; animation-delay: 0.3s; }
+.speaking-waves span:nth-child(5) { height: 20px; animation-delay: 0.4s; }
+
+@keyframes speakingWave {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.7; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* Idle state - subtle pulse */
+.idle-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-dot {
+  width: 16px;
+  height: 16px;
+  background: var(--od-teal);
+  border-radius: 50%;
+  animation: idlePulse 2s ease-in-out infinite;
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.5);
+}
+
+@keyframes idlePulse {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 0.8;
+    box-shadow: 0 0 20px rgba(0, 212, 170, 0.5);
+  }
+  50% { 
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 40px rgba(0, 212, 170, 0.8);
+  }
 }
 
 /* Beautiful spotlight behind Luna */
@@ -1687,13 +1800,10 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Video plays smoothly in speaking state */
+/* Video plays smoothly in speaking state - NO gold glow, clean display */
 .luna-avatar.speaking .avatar-video {
   animation: none; /* Let the video itself provide the animation */
-  box-shadow: 
-    0 0 50px var(--od-gold-glow),
-    0 0 100px var(--od-violet-glow),
-    inset 0 0 20px rgba(0, 0, 0, 0.5);
+  box-shadow: none; /* Clean, no distractions - video is the focus */
 }
 
 /* ===========================================

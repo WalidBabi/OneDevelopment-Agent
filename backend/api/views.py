@@ -769,7 +769,7 @@ def generate_tts(request):
     Returns: MP3 audio file
     """
     text = request.data.get('text', '').strip()
-    voice_id = request.data.get('voice', 'default')
+    voice_id = request.data.get('voice', 'shimmer')  # Default to shimmer
     
     if not text:
         return Response({
@@ -780,12 +780,13 @@ def generate_tts(request):
     if len(text) > 4096:
         text = text[:4096]
     
-    # Get the actual voice name
-    voice = OPENAI_TTS_VOICES.get(voice_id, 'nova')
+    # Get the actual voice name - ensure shimmer is used if voice_id is shimmer
+    voice = OPENAI_TTS_VOICES.get(voice_id, OPENAI_TTS_VOICES.get('shimmer', 'shimmer'))
     
     try:
         client = get_openai_client()
         
+        print(f"🎤 TTS REQUEST: voice_id='{voice_id}' → voice='{voice}' | text: {text[:50]}...")
         logger.info(f"Generating TTS with OpenAI voice '{voice}' for text: {text[:50]}...")
         
         # Generate speech using OpenAI TTS
@@ -796,6 +797,8 @@ def generate_tts(request):
             response_format="mp3"
         )
         
+        print(f"✅ TTS GENERATED: voice='{voice}', size={len(response.content)} bytes")
+        
         # Get the audio content
         audio_content = response.content
         
@@ -805,6 +808,8 @@ def generate_tts(request):
         http_response = HttpResponse(audio_content, content_type='audio/mpeg')
         http_response['Content-Disposition'] = 'inline; filename="speech.mp3"'
         http_response['Content-Length'] = len(audio_content)
+        http_response['X-TTS-Voice'] = voice  # Add header to verify which voice was used
+        http_response['X-TTS-Voice-ID'] = voice_id  # Original request
         
         return http_response
         

@@ -115,6 +115,14 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Expose custom headers to frontend
+CORS_EXPOSE_HEADERS = [
+    'X-TTS-Voice',
+    'X-TTS-Voice-ID',
+    'Content-Length',
+    'Content-Type',
+]
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

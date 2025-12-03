@@ -368,38 +368,49 @@ const useEnhancedSpeech = () => {
         onEnd?.();
       };
       
-      // Resume audio context if suspended (browser autoplay policy)
-      if (audioContextRef.current?.state === 'suspended') {
-        await audioContextRef.current.resume();
+      // Try to play audio - handle autoplay blocking
+      try {
+        // Resume audio context if suspended (browser autoplay policy)
+        if (audioContextRef.current?.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+        
+        await audio.play();
+      } catch (playError) {
+        // Autoplay blocked - this happens on first interaction
+        if (playError.name === 'NotAllowedError') {
+          console.log('⚠️ Autoplay blocked - waiting for user interaction');
+          // Audio will play on next user interaction (mic click, suggestion click, etc)
+          // For now, use browser TTS as immediate fallback
+          setIsSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+          
+          if (window.speechSynthesis) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+            utterance.onend = () => {
+              setIsSpeaking(false);
+              onEnd?.();
+            };
+            utterance.onerror = () => {
+              setIsSpeaking(false);
+              onEnd?.();
+            };
+            utterance.onstart = () => setIsSpeaking(true);
+            window.speechSynthesis.speak(utterance);
+          }
+        } else {
+          throw playError;
+        }
       }
-      
-      await audio.play();
       
     } catch (error) {
       console.error('TTS error:', error);
       setIsSpeaking(false);
       setAmplitude(0);
       setMouthOpen(0);
-      
-      // Fallback to browser speech synthesis if OpenAI fails
-      console.log('⚠️ Falling back to browser speech synthesis');
-      if (window.speechSynthesis) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.pitch = 1.0;
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          onEnd?.();
-        };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-          onEnd?.();
-        };
-        utterance.onstart = () => setIsSpeaking(true);
-        window.speechSynthesis.speak(utterance);
-      } else {
-        onEnd?.();
-      }
+      onEnd?.();
     }
   }, [animateLipSync]);
 
@@ -511,6 +522,8 @@ const useSpeechRecognition = (onAutoSend) => {
       const timeDataArray = new Uint8Array(bufferLength);
       const freqDataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
 
+      let debugCounter = 0;
+      
       const updateWaveform = () => {
         if (!analyserRef.current || !audioContextRef.current) return;
         
@@ -521,27 +534,31 @@ const useSpeechRecognition = (onAutoSend) => {
         
         // Calculate RMS level from time domain (more accurate for speech)
         let sum = 0;
+        let min = 255, max = 0;
         for (let i = 0; i < bufferLength; i++) {
           const value = (timeDataArray[i] - 128) / 128; // Normalize to -1 to 1
           sum += value * value;
+          if (timeDataArray[i] < min) min = timeDataArray[i];
+          if (timeDataArray[i] > max) max = timeDataArray[i];
         }
         const rms = Math.sqrt(sum / bufferLength);
-        const normalizedLevel = Math.min(rms * 3, 1); // Amplify RMS
+        const normalizedLevel = Math.min(rms * 8, 1); // Moderate amplification for natural response
         setAudioLevel(normalizedLevel);
         
         // Create waveform from time domain data - sample 32 points
         const waveform = [];
         const step = Math.floor(bufferLength / 32);
         for (let i = 0; i < 32; i++) {
-          // Convert from 0-255 to 0-1 range, centered at 0.5
           const raw = timeDataArray[i * step];
           const value = Math.abs(raw - 128) / 128; // Distance from center
-          waveform.push(value);
+          // Moderate amplification - responds to speech but not tiny noises
+          waveform.push(Math.min(value * 8, 1));
         }
         setWaveformData(waveform);
 
-        // Check for speech activity
-        if (normalizedLevel > 0.02) {
+        // Check for speech activity - only trigger on actual speech
+        const signalRange = max - min;
+        if (normalizedLevel > 0.05 && signalRange > 5) {
           lastSpeechTimeRef.current = Date.now();
           hasSpokenRef.current = true;
         }
@@ -551,6 +568,8 @@ const useSpeechRecognition = (onAutoSend) => {
 
       updateWaveform();
       console.log('🎤 Audio analyzer started successfully!');
+      console.log('🎤 Audio context state:', audioContextRef.current.state);
+      console.log('🎤 Sample rate:', audioContextRef.current.sampleRate);
     } catch (e) {
       console.error('❌ Failed to start audio analyzer:', e);
     }
@@ -695,6 +714,16 @@ const useSpeechRecognition = (onAutoSend) => {
       console.error('Speech recognition not initialized');
       setError('not_initialized');
       return false;
+    }
+    
+    // Resume any suspended audio contexts (unlock autoplay)
+    if (audioContextRef.current?.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+        console.log('🔊 Audio context unlocked');
+      } catch (e) {
+        console.error('Failed to resume audio context:', e);
+      }
     }
     
     // Reset state
@@ -1670,6 +1699,20 @@ const LunaAvatarInterface = () => {
     if (text) setInputText(text);
   }, [recognition.transcript, recognition.interimTranscript]);
 
+  // Restart listening after speech ends (TTS fallback)
+  useEffect(() => {
+    // When speech stops and we're not processing, restart listening
+    if (!speech.isSpeaking && !isProcessing && !isVideoPlaying && !isGeneratingVideo && micPermission === 'granted') {
+      const restartTimeout = setTimeout(() => {
+        if (recognition.isSupported && !recognition.isListening) {
+          console.log('Speech ended - restarting listening');
+          recognition.startListening();
+        }
+      }, 800);
+      return () => clearTimeout(restartTimeout);
+    }
+  }, [speech.isSpeaking, isProcessing, isVideoPlaying, isGeneratingVideo, micPermission, recognition]);
+
   // Auto-send when a final transcript is received
   useEffect(() => {
     if (recognition.transcript && recognition.transcript.trim() && !isProcessing) {
@@ -1747,13 +1790,27 @@ const LunaAvatarInterface = () => {
             className={`luna-avatar ${lunaState}`}
             onClick={handleAvatarClick}
           >
-            <div className="avatar-ring ring-1"></div>
-            <div className="avatar-ring ring-2"></div>
-            <div className="avatar-ring ring-3"></div>
+            <div className="avatar-ring ring-1" style={{ opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1, transition: 'opacity 0.4s ease-in-out' }}></div>
+            <div className="avatar-ring ring-2" style={{ opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1, transition: 'opacity 0.4s ease-in-out' }}></div>
+            <div className="avatar-ring ring-3" style={{ opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1, transition: 'opacity 0.4s ease-in-out' }}></div>
 
-            <div className="avatar-core">
-              {/* Show video if available, otherwise static image */}
-              {currentVideoUrl ? (
+            <div className="avatar-core" style={{ position: 'relative' }}>
+              {/* Static image - always visible as background */}
+              <img 
+                src="/Luna.png" 
+                alt="Luna" 
+                className="avatar-image" 
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: 'auto',
+                  opacity: currentVideoUrl ? 0 : 1,
+                  transition: 'opacity 0.4s ease-in-out'
+                }}
+              />
+              
+              {/* Video overlay - fades in smoothly over the image */}
+              {currentVideoUrl && (
                 <video
                   ref={videoRef}
                   src={currentVideoUrl}
@@ -1762,37 +1819,64 @@ const LunaAvatarInterface = () => {
                   loop={false}
                   muted={false}
                   playsInline
+                  preload="auto"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    opacity: isVideoPlaying ? 1 : 0,
+                    transition: 'opacity 0.4s ease-in-out',
+                    zIndex: 2
+                  }}
+                  onLoadedData={() => {
+                    console.log('Video loaded and ready');
+                    setIsVideoPlaying(true);
+                  }}
                   onPlay={() => {
-                    console.log('Video started playing');
+                    console.log('Video playing');
                     setIsVideoPlaying(true);
                   }}
                   onEnded={() => {
-                    console.log('Video ended');
+                    console.log('Video ended - restarting listening');
                     setIsVideoPlaying(false);
                     setCurrentVideoUrl(null);
+                    // Restart listening after video ends
+                    setTimeout(() => {
+                      if (micPermission === 'granted' && recognition.isSupported && !recognition.isListening) {
+                        recognition.startListening();
+                      }
+                    }, 800);
                   }}
-                  onPause={() => setIsVideoPlaying(false)}
-                  onError={(e) => {
+                  onPause={() => {
+                    console.log('Video paused');
+                  }}
+                  onError((e) => {
                     console.error('Video playback error:', e);
                     setIsVideoPlaying(false);
                     setCurrentVideoUrl(null);
                   }}
                 />
-              ) : (
-                <img src="/Luna.png" alt="Luna" className="avatar-image" />
               )}
 
-              {/* Mouth overlay disabled - looks unnatural with static image */}
+              {/* Hide speech glow when video is playing */}
+              {!isVideoPlaying && !currentVideoUrl && (
+                <div
+                  className="speech-glow"
+                  style={{
+                    opacity: speech.isSpeaking ? 0.4 + speech.mouthOpen * 0.5 : 0,
+                    transform: `scale(${speech.isSpeaking ? 1 + speech.mouthOpen * 0.15 : 1})`,
+                  }}
+                ></div>
+              )}
 
-              <div
-                className="speech-glow"
-                style={{
-                  opacity: speech.isSpeaking ? 0.4 + speech.mouthOpen * 0.5 : 0,
-                  transform: `scale(${speech.isSpeaking ? 1 + speech.mouthOpen * 0.15 : 1})`,
-                }}
-              ></div>
-
-              <div className="avatar-glow"></div>
+              {/* Hide avatar glow when video is playing */}
+              <div className="avatar-glow" style={{
+                opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1,
+                transition: 'opacity 0.4s ease-in-out'
+              }}></div>
             </div>
 
             <div className="avatar-particles">
@@ -1802,22 +1886,53 @@ const LunaAvatarInterface = () => {
             </div>
           </div>
 
-          {/* Listening / speaking indicator */}
+          {/* Minimal Status Indicator - Waveform or Thinking */}
           <div className="luna-status-bar avatar-only-status">
-            <span className={`status-indicator ${lunaState}`}></span>
-            <span className="status-label">{statusLabel}</span>
+            {/* Waveform when listening */}
+            {recognition.isListening && (
+              <div className="voice-waveform-inline">
+                <MicrophoneWaveform 
+                  waveformData={recognition.waveformData} 
+                  isListening={recognition.isListening}
+                  audioLevel={recognition.audioLevel}
+                />
+              </div>
+            )}
+            
+            {/* Thinking animation when processing */}
+            {(isProcessing || isGeneratingVideo) && !recognition.isListening && (
+              <div className="thinking-indicator">
+                <div className="thinking-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <span className="thinking-text">
+                  {isGeneratingVideo ? `Generating response...` : 'Thinking...'}
+                </span>
+              </div>
+            )}
+            
+            {/* Speaking indicator */}
+            {(isVideoPlaying || speech.isSpeaking) && (
+              <div className="speaking-indicator">
+                <div className="speaking-waves">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            )}
+            
+            {/* Idle state - subtle ready indicator */}
+            {lunaState === 'idle' && !isProcessing && !isGeneratingVideo && (
+              <div className="idle-indicator">
+                <span className="pulse-dot"></span>
+              </div>
+            )}
           </div>
-
-          {/* Voice Waveform Visualization */}
-          {recognition.isListening && (
-            <div className="voice-waveform-container">
-              <MicrophoneWaveform 
-                waveformData={recognition.waveformData} 
-                isListening={recognition.isListening}
-                audioLevel={recognition.audioLevel}
-              />
-            </div>
-          )}
 
           {/* Live Transcript Display (Debug) */}
           {(recognition.transcript || recognition.interimTranscript || debugTranscript) && (

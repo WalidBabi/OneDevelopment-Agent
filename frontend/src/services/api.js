@@ -207,12 +207,19 @@ export const chatService = {
   // Text-to-Speech (OpenAI realistic voices)
   generateTTS: async (text, voice = 'nova') => {
     try {
+      console.log(`🎙️ Requesting TTS with voice: ${voice}`);
       const response = await api.post('/tts/generate/', {
         text,
         voice,
       }, {
         responseType: 'blob',  // Important: receive as binary blob
       });
+      
+      // Log which voice was actually used (from response headers)
+      const headers = response.headers;
+      const actualVoice = headers['x-tts-voice'] || headers['X-TTS-Voice'] || voice;
+      const requestedVoiceId = headers['x-tts-voice-id'] || headers['X-TTS-Voice-ID'] || voice;
+      console.log(`✅ TTS Response - Requested: ${requestedVoiceId}, Used: ${actualVoice}`);
       
       // Create a URL for the audio blob
       const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
