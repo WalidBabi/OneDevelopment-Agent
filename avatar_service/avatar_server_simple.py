@@ -114,12 +114,13 @@ def generate_video_with_sadtalker(audio_path: Path, source_image: Path, output_d
         # Fallback to system python if no venv
         sadtalker_python = sys.executable
     
+    # Use absolute paths for all arguments since we're running from SadTalker directory
     cmd = [
         str(sadtalker_python),
-        str(SADTALKER_PATH / "inference.py"),
-        "--driven_audio", str(audio_path),
-        "--source_image", str(source_image),
-        "--result_dir", str(video_temp_dir),
+        "inference.py",  # Relative to SadTalker folder (we'll set cwd)
+        "--driven_audio", str(audio_path.absolute()),
+        "--source_image", str(source_image.absolute()),
+        "--result_dir", str(video_temp_dir.absolute()),
         "--still",
         "--preprocess", "full",
         "--expression_scale", "1.0"
@@ -135,8 +136,8 @@ def generate_video_with_sadtalker(audio_path: Path, source_image: Path, output_d
     
     logger.info(f"🎬 Generating {quality} quality video...")
     
-    # Run SadTalker
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # Run SadTalker from its own directory (so it can find checkpoints)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(SADTALKER_PATH))
     
     if result.returncode != 0:
         logger.error(f"SadTalker error: {result.stderr}")
