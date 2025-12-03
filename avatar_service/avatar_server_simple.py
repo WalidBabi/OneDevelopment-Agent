@@ -61,30 +61,36 @@ class AvatarResponse(BaseModel):
     audio_url: Optional[str] = None
 
 
-def generate_audio_with_tts(text: str, output_path: Path) -> float:
-    """Generate audio from text using edge-tts"""
+async def generate_audio_with_tts(text: str, output_path: Path) -> float:
+    """Generate audio from text using TTS Manager"""
     try:
-        # Use edge-tts for free TTS
-        cmd = [
-            "edge-tts",
-            "--text", text,
-            "--write-media", str(output_path),
-            "--voice", "en-US-AriaNeural"
-        ]
+        # Import TTS Manager
+        from tts_manager import TTSManager
         
-        subprocess.run(cmd, check=True, capture_output=True)
+        tts = TTSManager()
+        
+        # Generate speech
+        success = await tts.generate_speech(text, str(output_path), voice="default")
+        
+        if not success:
+            raise Exception("TTS generation failed with all engines")
         
         # Get duration using ffprobe
-        duration_cmd = [
-            "ffprobe",
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            str(output_path)
-        ]
-        
-        result = subprocess.run(duration_cmd, capture_output=True, text=True)
-        duration = float(result.stdout.strip())
+        try:
+            duration_cmd = [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(output_path)
+            ]
+            
+            result = subprocess.run(duration_cmd, capture_output=True, text=True)
+            duration = float(result.stdout.strip())
+        except:
+            # Estimate duration if ffprobe fails (roughly 150 words per minute)
+            words = len(text.split())
+            duration = (words / 150) * 60
         
         return duration
     except Exception as e:
@@ -182,7 +188,7 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
         
         # Step 1: Generate audio
         logger.info("🎤 Generating audio...")
-        duration = generate_audio_with_tts(request.text, audio_path)
+        duration = await generate_audio_with_tts(request.text, audio_path)
         logger.info(f"✓ Audio generated: {duration:.1f}s")
         
         # Step 2: Generate video with SadTalker
