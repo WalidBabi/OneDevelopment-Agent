@@ -114,7 +114,9 @@ class SadTalkerGenerator:
             "--still",  # Less head movement = faster
             "--preprocess", settings.get('preprocess', 'crop'),  # Use crop for speed
             "--size", settings['size'],
-            "--batch_size", settings.get('batch_size', '4')  # Use setting or default to 4
+            "--batch_size", settings.get('batch_size', '4'),  # Use setting or default to 4
+            "--verbose"  # Show detailed output for debugging
+            # GPU is controlled via CUDA_VISIBLE_DEVICES env var, not --device flag
         ]
         
         # Only add enhancer if specified (skip for fast mode)
@@ -197,6 +199,8 @@ class SadTalkerGenerator:
             env = os.environ.copy()
             env['CUDA_VISIBLE_DEVICES'] = '0'  # Force GPU 0 (NVIDIA)
             env['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+            env['TORCH_CUDA_ARCH_LIST'] = '8.9'  # RTX 4050 architecture
+            env['FORCE_CUDA'] = '1'  # Force CUDA usage
             
             # Set FFmpeg path for pydub (found via search)
             ffmpeg_bin = r"C:\Users\Walid\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin"
