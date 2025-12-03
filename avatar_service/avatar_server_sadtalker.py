@@ -36,13 +36,15 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f"Using device: {DEVICE}")
 
 # Try to import SadTalker generator
+SadTalkerGenerator = None
 try:
     from sadtalker_generator import SadTalkerGenerator
-    sadtalker_generator = None
     logger.info("SadTalkerGenerator imported successfully")
 except Exception as e:
     logger.warning(f"Could not import SadTalkerGenerator: {e}")
-    sadtalker_generator = None
+    SadTalkerGenerator = None
+
+sadtalker_generator = None
 
 app = FastAPI(title="Luna Avatar Service with SadTalker")
 
