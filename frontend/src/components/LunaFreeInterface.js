@@ -666,16 +666,24 @@ const useSpeechRecognition = (onAutoSend) => {
       };
 
       recognitionRef.current.onend = () => {
-        console.log('Speech recognition ended, restarting...');
+        console.log('Speech recognition ended');
         // Auto-restart if still supposed to be listening
         if (recognitionRef.current && isListening) {
+          console.log('Restarting speech recognition...');
           setTimeout(() => {
             try {
-              recognitionRef.current.start();
+              if (recognitionRef.current && isListening) {
+                recognitionRef.current.start();
+                console.log('✅ Speech recognition restarted successfully');
+              }
             } catch (e) {
-              console.log('Restart failed:', e);
+              console.log('⚠️ Restart failed:', e);
+              // If restart fails, reset the state to allow auto-restart logic to kick in
+              setIsListening(false);
             }
           }, 100);
+        } else {
+          console.log('Not restarting - isListening:', isListening);
         }
       };
       
@@ -687,8 +695,13 @@ const useSpeechRecognition = (onAutoSend) => {
           setIsListening(false);
           stopAudioAnalyzer();
         } else if (event.error === 'no-speech') {
-          // No speech detected, keep listening
-          console.log('No speech detected, continuing...');
+          // No speech detected, need to restart
+          console.log('No speech detected, will restart...');
+          // Don't set isListening to false immediately - let onend handle it
+          // This prevents the "no-speech" error from permanently stopping recognition
+        } else if (event.error === 'aborted') {
+          // Aborted is expected when we manually stop, don't log as error
+          console.log('Speech recognition aborted (expected)');
         }
       };
 
@@ -716,6 +729,12 @@ const useSpeechRecognition = (onAutoSend) => {
       return false;
     }
     
+    // If already listening, don't start again
+    if (isListening) {
+      console.log('Already listening, skipping start');
+      return true;
+    }
+    
     // Resume any suspended audio contexts (unlock autoplay)
     if (audioContextRef.current?.state === 'suspended') {
       try {
@@ -739,16 +758,24 @@ const useSpeechRecognition = (onAutoSend) => {
     await startAudioAnalyzer();
     
     try {
+      // Clean abort - don't log errors for expected behavior
       try { recognitionRef.current.abort(); } catch (e) {}
       
       setTimeout(() => {
         try {
-          recognitionRef.current.start();
-          console.log('🎤 Speech recognition started');
+          if (recognitionRef.current) {
+            recognitionRef.current.start();
+            console.log('🎤 Speech recognition started');
+          }
         } catch (e) {
-          console.error('Failed to start recognition:', e);
-          setIsListening(false);
-          setError('start_failed');
+          // Check if it's the "already started" error
+          if (e.name === 'InvalidStateError') {
+            console.log('Recognition already started');
+          } else {
+            console.error('Failed to start recognition:', e);
+            setIsListening(false);
+            setError('start_failed');
+          }
         }
       }, 100);
       
@@ -759,7 +786,7 @@ const useSpeechRecognition = (onAutoSend) => {
       setError('start_failed');
       return false;
     }
-  }, [startAudioAnalyzer]);
+  }, [startAudioAnalyzer, isListening]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
