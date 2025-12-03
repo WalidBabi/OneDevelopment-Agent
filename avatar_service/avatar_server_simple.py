@@ -108,9 +108,14 @@ def generate_video_with_sadtalker(audio_path: Path, source_image: Path, output_d
     video_temp_dir = TEMP_DIR / video_id
     video_temp_dir.mkdir(exist_ok=True)
     
-    # Build SadTalker command
+    # Build SadTalker command - use SadTalker's own Python venv
+    sadtalker_python = SADTALKER_PATH / "venv" / "Scripts" / "python.exe"
+    if not sadtalker_python.exists():
+        # Fallback to system python if no venv
+        sadtalker_python = sys.executable
+    
     cmd = [
-        sys.executable,
+        str(sadtalker_python),
         str(SADTALKER_PATH / "inference.py"),
         "--driven_audio", str(audio_path),
         "--source_image", str(source_image),
