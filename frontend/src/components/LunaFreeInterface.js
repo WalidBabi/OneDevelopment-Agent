@@ -456,7 +456,7 @@ const useEnhancedSpeech = () => {
 };
 
 // Speech Recognition Hook with Audio Waveform and Auto-Send
-const useSpeechRecognition = (onAutoSend) => {
+const useSpeechRecognition = (onAutoSend, onInterrupt) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -660,6 +660,12 @@ const useSpeechRecognition = (onAutoSend) => {
           }
         }
         
+        // INTERRUPT: If user starts speaking, stop Luna from talking
+        // This allows users to interrupt and speak again
+        if ((interim || final) && onInterrupt) {
+          onInterrupt();
+        }
+        
         // Update last speech time when we get results
         lastSpeechTimeRef.current = Date.now();
         hasSpokenRef.current = true;
@@ -728,7 +734,7 @@ const useSpeechRecognition = (onAutoSend) => {
         } catch (e) {}
       }
     };
-  }, [isSupported, stopAudioAnalyzer, isListening]);
+  }, [isSupported, stopAudioAnalyzer, isListening, onInterrupt]);
 
   const startListening = useCallback(async () => {
     if (!recognitionRef.current) {
@@ -1490,7 +1496,38 @@ const LunaAvatarInterface = () => {
     }
   }, [isProcessing]);
 
-  const recognition = useSpeechRecognition(handleAutoSend);
+  // Interrupt callback - stop Luna when user starts speaking
+  const handleInterrupt = useCallback(() => {
+    console.log('🛑 User speaking - interrupting Luna...');
+    
+    // Stop TTS audio if playing
+    if (speech.isSpeaking) {
+      speech.stop();
+      console.log('🔇 Stopped TTS audio');
+    }
+    
+    // Stop video if playing
+    if (isVideoPlaying && currentVideoUrl) {
+      setIsVideoPlaying(false);
+      setCurrentVideoUrl(null);
+      console.log('📹 Stopped video playback');
+    }
+    
+    // Stop video generation if in progress
+    if (isGeneratingVideo) {
+      setIsGeneratingVideo(false);
+      setVideoProgress(0);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      console.log('⏹️ Stopped video generation');
+    }
+    
+    // Reset processing state to allow new input
+    setIsProcessing(false);
+  }, [speech, isVideoPlaying, currentVideoUrl, isGeneratingVideo]);
+
+  const recognition = useSpeechRecognition(handleAutoSend, handleInterrupt);
 
   // Request microphone permission on mount
   useEffect(() => {
