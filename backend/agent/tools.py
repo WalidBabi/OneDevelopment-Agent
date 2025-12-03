@@ -15,9 +15,27 @@ import os
 
 @tool
 def search_knowledge_base(query: str, n_results: int = 5) -> str:
-    """Search One Development's internal knowledge base for company information, properties, and services.
+    """Search One Development's internal knowledge base for company information, projects, and services.
     
-    Use this for questions specifically about One Development's offerings.
+    THIS IS YOUR PRIMARY TOOL - use it FIRST for all One Development questions.
+    
+    The knowledge base contains:
+    - Current project portfolio (Laguna Residence, DO Dubai Islands, DO New Cairo, etc.)
+    - Pipeline projects (Al Marjan Islands, DO Riyadh, DO Athens, etc.)
+    - Project URLs and details
+    - Company information
+    
+    Example queries:
+    - "One Development projects portfolio" - Get all projects
+    - "Laguna Residence" - Get specific project details
+    - "DO Dubai Islands" - Get specific project details
+    
+    Args:
+        query: What to search for (e.g., "projects", "Laguna Residence")
+        n_results: Number of results to return (default 5)
+    
+    Returns:
+        Project information, URLs, and details from the knowledge base
     """
     from knowledge.vector_store import get_vector_store
     vector_store = get_vector_store()
@@ -38,7 +56,127 @@ def search_uploaded_documents(query: str, n_results: int = 3) -> str:
 
 
 # ============================================================================
-# WEB SEARCH TOOLS
+# TAVILY AI SEARCH - Premium Search for AI Agents
+# ============================================================================
+
+@tool
+def tavily_search(query: str, search_depth: str = "basic", max_results: int = 5) -> str:
+    """Search the web using Tavily - an AI-optimized search engine designed for agents.
+    
+    Tavily provides high-quality, relevant results specifically optimized for AI applications.
+    Use this as the PRIMARY web search tool for accurate, up-to-date information.
+    
+    Args:
+        query: The search query
+        search_depth: "basic" for fast results, "advanced" for comprehensive research
+        max_results: Maximum number of results (default 5)
+    
+    Returns:
+        AI-optimized search results with relevant content
+    """
+    try:
+        from tavily import TavilyClient
+        
+        api_key = os.getenv('TAVILY_API_KEY')
+        if not api_key:
+            # Fallback to regular web search if no Tavily key
+            return search_web.invoke({"query": query, "max_results": max_results})
+        
+        client = TavilyClient(api_key=api_key)
+        
+        response = client.search(
+            query=query,
+            search_depth=search_depth,
+            max_results=max_results,
+            include_answer=True,
+            include_raw_content=False
+        )
+        
+        # Format results
+        formatted = []
+        
+        # Include AI-generated answer if available
+        if response.get('answer'):
+            formatted.append(f"**AI Summary:** {response['answer']}\n")
+        
+        # Include search results
+        results = response.get('results', [])
+        if results:
+            formatted.append("**Sources:**")
+            for i, result in enumerate(results, 1):
+                title = result.get('title', 'No title')
+                url = result.get('url', '')
+                content = result.get('content', '')[:300]
+                formatted.append(f"{i}. **{title}**\n   {content}\n   URL: {url}")
+        
+        if formatted:
+            return f"Tavily Search Results for '{query}':\n\n" + "\n\n".join(formatted)
+        
+        return f"No results found for '{query}'"
+        
+    except ImportError:
+        return search_web.invoke({"query": query, "max_results": max_results})
+    except Exception as e:
+        # Fallback to regular search on error
+        return search_web.invoke({"query": query, "max_results": max_results})
+
+
+@tool
+def tavily_research(topic: str) -> str:
+    """Conduct deep research on a topic using Tavily's advanced search.
+    
+    Use this for comprehensive research that requires multiple high-quality sources.
+    Best for complex questions, market analysis, or detailed investigations.
+    
+    Args:
+        topic: The topic to research in depth
+    
+    Returns:
+        Comprehensive research results from multiple sources
+    """
+    try:
+        from tavily import TavilyClient
+        
+        api_key = os.getenv('TAVILY_API_KEY')
+        if not api_key:
+            return f"Tavily API key not configured. Using standard search.\n\n" + search_web.invoke({"query": topic, "max_results": 5})
+        
+        client = TavilyClient(api_key=api_key)
+        
+        # Use advanced search depth for research
+        response = client.search(
+            query=topic,
+            search_depth="advanced",
+            max_results=10,
+            include_answer=True,
+            include_raw_content=True
+        )
+        
+        formatted = [f"**Deep Research on: {topic}**\n"]
+        
+        # AI-generated comprehensive answer
+        if response.get('answer'):
+            formatted.append(f"**Summary:**\n{response['answer']}\n")
+        
+        # Detailed results
+        results = response.get('results', [])
+        if results:
+            formatted.append("**Detailed Findings:**")
+            for i, result in enumerate(results[:7], 1):
+                title = result.get('title', '')
+                content = result.get('content', '')[:500]
+                url = result.get('url', '')
+                score = result.get('score', 0)
+                formatted.append(f"\n{i}. **{title}** (relevance: {score:.2f})\n{content}\nSource: {url}")
+        
+        return "\n".join(formatted)
+        
+    except Exception as e:
+        return f"Research error: {str(e)}. Falling back to standard search.\n\n" + search_web.invoke({"query": topic, "max_results": 5})
+
+
+# ============================================================================
+# WEB SEARCH TOOLS (DuckDuckGo Fallback)
 # ============================================================================
 
 @tool
@@ -149,46 +287,84 @@ def search_web_for_market_data(query: str) -> str:
 def scrape_webpage(url: str) -> str:
     """Scrape and extract text content from a specific webpage.
     
-    Use this when you have a specific URL and need to extract information from it.
+    THIS IS YOUR MOST RELIABLE TOOL - use it first for One Development questions.
+    
+    Recommended URLs:
+    - https://oneuae.com/our-development — Project portfolio
+    - https://oneuae.com — Homepage with company info
     
     Args:
-        url: The URL to scrape
+        url: The URL to scrape (e.g., "https://oneuae.com/our-development")
     
     Returns:
-        Extracted text content from the webpage
+        Extracted text content from the webpage with project names and details
     """
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
         }
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=20)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Remove script and style elements
-        for element in soup(['script', 'style', 'nav', 'footer', 'header']):
+        # Extract project-related content more intelligently
+        # Look for project cards, titles, and descriptions
+        project_info = []
+        
+        # Find all headings and nearby text (likely project names)
+        for heading in soup.find_all(['h1', 'h2', 'h3', 'h4']):
+            heading_text = heading.get_text(strip=True)
+            if heading_text and len(heading_text) > 2:
+                project_info.append(f"**{heading_text}**")
+                # Get sibling or parent text
+                parent = heading.find_parent(['div', 'section', 'article'])
+                if parent:
+                    para = parent.find('p')
+                    if para:
+                        project_info.append(para.get_text(strip=True)[:200])
+        
+        # Also extract links that might be project links
+        links_info = []
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '')
+            text = link.get_text(strip=True)
+            if text and len(text) > 3 and len(text) < 100:
+                if any(kw in href.lower() for kw in ['development', 'project', 'property', 'residence', 'tower']):
+                    full_url = href if href.startswith('http') else f"https://oneuae.com{href}"
+                    links_info.append(f"• {text} — {full_url}")
+        
+        # Remove script and style elements for general text
+        for element in soup(['script', 'style', 'nav', 'footer']):
             element.decompose()
         
-        # Get text content
+        # Get general text content
         text = soup.get_text(separator='\n', strip=True)
+        lines = [line.strip() for line in text.split('\n') if line.strip() and len(line.strip()) > 10]
+        cleaned_text = '\n'.join(lines[:80])  # First 80 meaningful lines
         
-        # Clean up multiple newlines
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        cleaned_text = '\n'.join(lines)
+        # Build response
+        result = f"**Content scraped from {url}:**\n\n"
         
-        # Limit to first 3000 characters to avoid overwhelming the context
-        if len(cleaned_text) > 3000:
-            cleaned_text = cleaned_text[:3000] + "\n\n[Content truncated...]"
+        if links_info:
+            result += "**Found Links/Projects:**\n" + '\n'.join(links_info[:15]) + "\n\n"
         
-        return f"Content from {url}:\n\n{cleaned_text}"
+        if project_info:
+            result += "**Headings & Content:**\n" + '\n'.join(project_info[:20]) + "\n\n"
+        
+        result += "**Page Text:**\n" + cleaned_text[:2500]
+        
+        return result
         
     except requests.exceptions.Timeout:
-        return f"Timeout while accessing {url}. The page took too long to load."
+        return f"Timeout accessing {url}. Try again or use search_knowledge_base instead."
     except requests.exceptions.RequestException as e:
-        return f"Could not access {url}: {str(e)}"
+        return f"Could not access {url}: {str(e)}. Try search_knowledge_base as backup."
     except Exception as e:
-        return f"Error scraping {url}: {str(e)}"
+        return f"Error scraping {url}: {str(e)}. Try search_knowledge_base as backup."
 
 
 @tool
@@ -464,6 +640,8 @@ def find_and_read_brochure(search_query: str) -> str:
         return f"Error searching for brochures: {str(e)}. Visit oneuae.com for brochure downloads."
 
 
+
+
 # ============================================================================
 # CONTEXT TOOLS
 # ============================================================================
@@ -583,7 +761,10 @@ def get_all_tools():
         # Knowledge base
         search_knowledge_base,
         search_uploaded_documents,
-        # Web search
+        # Tavily AI Search (Premium) - best for autonomous web research!
+        tavily_search,
+        tavily_research,
+        # Web search and scraping - for autonomous discovery
         search_web,
         search_web_for_market_data,
         search_one_development_website,

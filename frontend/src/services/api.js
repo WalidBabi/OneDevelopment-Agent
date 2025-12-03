@@ -203,6 +203,36 @@ export const chatService = {
       return { status: 'unavailable' };
     }
   },
+
+  // Text-to-Speech (OpenAI realistic voices)
+  generateTTS: async (text, voice = 'nova') => {
+    try {
+      const response = await api.post('/tts/generate/', {
+        text,
+        voice,
+      }, {
+        responseType: 'blob',  // Important: receive as binary blob
+      });
+      
+      // Create a URL for the audio blob
+      const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      return { audioUrl, blob: audioBlob };
+    } catch (error) {
+      console.error('Error generating TTS:', error);
+      throw error;
+    }
+  },
+
+  getTTSVoices: async () => {
+    try {
+      const response = await api.get('/tts/voices/');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching TTS voices:', error);
+      return { voices: [] };
+    }
+  },
 };
 
 export default api;

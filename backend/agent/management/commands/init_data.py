@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from agent.models import SuggestedQuestion, KnowledgeBase
 from agent.data_ingestor import OneDevelopmentDataIngestor
-from agent.langgraph_agent import OneDevelopmentAgent
+from agent import get_luna_agent
 
 
 class Command(BaseCommand):
@@ -89,10 +89,10 @@ class Command(BaseCommand):
         
         self.stdout.write(self.style.SUCCESS(f'Created {len(initial_data)} knowledge base entries'))
         
-        # Initialize vector store
-        self.stdout.write('Initializing vector store...')
+        # Initialize vector store using Luna DeepAgent
+        self.stdout.write('Initializing vector store with Luna DeepAgent...')
         try:
-            agent = OneDevelopmentAgent()
+            agent = get_luna_agent()
             for item in initial_data:
                 agent.add_knowledge(
                     content=item.get('content', ''),

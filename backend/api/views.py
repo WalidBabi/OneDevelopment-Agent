@@ -3,14 +3,14 @@ from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
+from django.http import HttpResponse
 from agent.models import Conversation, Message, KnowledgeBase, SuggestedQuestion, PDFDocument
 from .serializers import (
     ConversationSerializer, MessageSerializer, ChatRequestSerializer,
     ChatResponseSerializer, SuggestedQuestionSerializer, KnowledgeBaseSerializer,
     PDFDocumentSerializer
 )
-from agent.langgraph_agent import OneDevelopmentAgent
-from agent import get_luna_agent  # Now using DeepAgent implementation
+from agent import get_luna_agent, LunaDeepAgent  # Using DeepAgent implementation
 from agent.data_ingestor import OneDevelopmentDataIngestor
 from agent.pdf_processor import PDFProcessor
 import uuid
@@ -19,39 +19,32 @@ import random
 import os
 import requests
 import logging
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
+
+# Initialize OpenAI client for TTS
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI()
+    return _openai_client
 
 
 # ============================================================================
 # AGENT INITIALIZATION
 # ============================================================================
 
-# Use environment variable to switch between agents
-# Set LUNA_USE_REACT=true to use the new ReAct agent
-USE_REACT_AGENT = os.getenv('LUNA_USE_REACT', 'true').lower() == 'true'
-
-# Legacy agent (fixed pipeline)
-_legacy_agent_instance = None
-
-def get_legacy_agent():
-    """Get the legacy fixed-pipeline agent"""
-    global _legacy_agent_instance
-    if _legacy_agent_instance is None:
-        _legacy_agent_instance = OneDevelopmentAgent()
-    return _legacy_agent_instance
-
-
-def get_agent():
+def get_agent() -> LunaDeepAgent:
     """
-    Get the appropriate agent based on configuration.
-    By default, uses the new ReAct agent.
-    Set LUNA_USE_REACT=false to use the legacy agent.
+    Get the Luna DeepAgent instance.
+    
+    Luna is an autonomous ReAct agent that decides its own path through reasoning.
+    No more rigid pipelines - Luna thinks and acts dynamically.
     """
-    if USE_REACT_AGENT:
-        return get_luna_agent()
-    else:
-        return get_legacy_agent()
+    return get_luna_agent()
 
 
 @api_view(['POST'])
@@ -82,7 +75,7 @@ def chat(request):
     # Get or create conversation
     conversation, created = Conversation.objects.get_or_create(
         session_id=session_id,
-        defaults={'metadata': {'agent_type': 'react' if USE_REACT_AGENT else 'legacy'}}
+        defaults={'metadata': {'agent_type': 'deepagent'}}
     )
     
     # Save user message
@@ -105,26 +98,15 @@ def chat(request):
         conversation_history=history
     )
     
-    # Build metadata based on agent type
-    if USE_REACT_AGENT:
-        # ReAct agent response with thinking visualization
-        metadata = {
-            'reasoning_steps': result.get('reasoning_steps', 0),
-            'tools_used': result.get('tools_used', 0),
-            'agent_type': 'react',
-            'thinking': result.get('thinking', []),
-            'tools_info': result.get('tools_info', [])
-        }
-        suggested_actions = _generate_suggested_actions_from_response(result['response'])
-    else:
-        # Legacy agent response
-        metadata = {
-            'intent': result.get('intent', 'general'),
-            'entities': result.get('entities', []),
-            'suggested_actions': result.get('suggested_actions', []),
-            'agent_type': 'legacy'
-        }
-        suggested_actions = result.get('suggested_actions', [])
+    # Build metadata from DeepAgent response
+    metadata = {
+        'reasoning_steps': result.get('reasoning_steps', 0),
+        'tools_used': result.get('tools_used', 0),
+        'agent_type': 'deepagent',
+        'thinking': result.get('thinking', []),
+        'tools_info': result.get('tools_info', [])
+    }
+    suggested_actions = _generate_suggested_actions_from_response(result['response'])
     
     # Save AI response
     ai_message = Message.objects.create(
@@ -142,11 +124,6 @@ def chat(request):
         'timestamp': timezone.now(),
         'metadata': metadata
     }
-    
-    # Include legacy fields for backward compatibility
-    if not USE_REACT_AGENT:
-        response_data['intent'] = result.get('intent', 'general')
-        response_data['entities'] = result.get('entities', [])
     
     return Response(response_data, status=status.HTTP_200_OK)
 
@@ -405,13 +382,10 @@ def health_check(request):
     try:
         agent = get_agent()
         agent_ready = agent is not None
-        agent_type = 'react' if USE_REACT_AGENT else 'legacy'
+        agent_type = 'deepagent'
         
-        # Get tool count for ReAct agent
-        if USE_REACT_AGENT and hasattr(agent, 'tools'):
-            tools_count = len(agent.tools)
-        else:
-            tools_count = 0
+        # Get tool count
+        tools_count = len(agent.tools) if hasattr(agent, 'tools') else 0
             
     except Exception as e:
         agent_ready = False
@@ -688,4 +662,105 @@ def avatar_health(request):
             'status': 'unavailable',
             'message': str(e)
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+# ============================================================================
+# TEXT-TO-SPEECH (OpenAI)
+# ============================================================================
+
+# OpenAI TTS Voice Options:
+# - nova: warm, friendly female (best for Luna!)
+# - alloy: neutral, balanced
+# - echo: deeper male voice
+# - fable: British accent
+# - onyx: deep, authoritative male
+# - shimmer: expressive female
+
+OPENAI_TTS_VOICES = {
+    'default': 'nova',      # Warm, natural female - perfect for Luna
+    'nova': 'nova',         # Warm, friendly female
+    'shimmer': 'shimmer',   # Expressive female
+    'alloy': 'alloy',       # Neutral, balanced
+    'echo': 'echo',         # Deeper male
+    'fable': 'fable',       # British accent
+    'onyx': 'onyx',         # Deep, authoritative male
+}
+
+
+@api_view(['POST'])
+def generate_tts(request):
+    """
+    Generate realistic speech using OpenAI TTS API.
+    
+    POST /api/tts/generate/
+    {
+        "text": "Hello, I'm Luna!",
+        "voice": "nova"  // optional: nova (default), shimmer, alloy, echo, fable, onyx
+    }
+    
+    Returns: MP3 audio file
+    """
+    text = request.data.get('text', '').strip()
+    voice_id = request.data.get('voice', 'default')
+    
+    if not text:
+        return Response({
+            'error': 'Text is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Limit text length to prevent abuse
+    if len(text) > 4096:
+        text = text[:4096]
+    
+    # Get the actual voice name
+    voice = OPENAI_TTS_VOICES.get(voice_id, 'nova')
+    
+    try:
+        client = get_openai_client()
+        
+        logger.info(f"Generating TTS with OpenAI voice '{voice}' for text: {text[:50]}...")
+        
+        # Generate speech using OpenAI TTS
+        response = client.audio.speech.create(
+            model="tts-1",  # Use "tts-1-hd" for even higher quality (but slower)
+            voice=voice,
+            input=text,
+            response_format="mp3"
+        )
+        
+        # Get the audio content
+        audio_content = response.content
+        
+        logger.info(f"TTS generated successfully, size: {len(audio_content)} bytes")
+        
+        # Return as audio file
+        http_response = HttpResponse(audio_content, content_type='audio/mpeg')
+        http_response['Content-Disposition'] = 'inline; filename="speech.mp3"'
+        http_response['Content-Length'] = len(audio_content)
+        
+        return http_response
+        
+    except Exception as e:
+        logger.error(f"OpenAI TTS error: {str(e)}")
+        return Response({
+            'error': f'TTS generation failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def tts_voices(request):
+    """
+    Get available TTS voices.
+    
+    GET /api/tts/voices/
+    """
+    voices = [
+        {'id': 'nova', 'name': 'Nova', 'description': 'Warm, friendly female - Luna\'s voice', 'default': True},
+        {'id': 'shimmer', 'name': 'Shimmer', 'description': 'Expressive, animated female'},
+        {'id': 'alloy', 'name': 'Alloy', 'description': 'Neutral, balanced voice'},
+        {'id': 'echo', 'name': 'Echo', 'description': 'Deeper male voice'},
+        {'id': 'fable', 'name': 'Fable', 'description': 'British accent'},
+        {'id': 'onyx', 'name': 'Onyx', 'description': 'Deep, authoritative male'},
+    ]
+    return Response({'voices': voices}, status=status.HTTP_200_OK)
 

@@ -14,6 +14,10 @@ Philosophy:
 
 Technical Foundation:
 Clean wrapper around LangGraph's ReAct pattern with simplified setup and better code organization.
+
+Observability:
+LangSmith tracing enabled for full visibility into agent reasoning and tool usage.
+Set LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY in .env to enable.
 """
 
 from typing import Dict, Any, List, Optional, Literal
@@ -31,6 +35,45 @@ from agent.deepagents_tools import get_deepagent_tools
 
 
 # ============================================================================
+# LANGSMITH OBSERVABILITY SETUP
+# ============================================================================
+
+def setup_langsmith():
+    """
+    Configure LangSmith tracing for observability.
+    
+    LangSmith provides:
+    - Full trace of agent reasoning steps
+    - Tool call inputs and outputs
+    - Token usage and latency metrics
+    - Error tracking and debugging
+    
+    Enable by setting in .env:
+        LANGCHAIN_TRACING_V2=true
+        LANGCHAIN_API_KEY=your-api-key
+        LANGCHAIN_PROJECT=luna-deepagent
+    """
+    tracing_enabled = os.getenv('LANGCHAIN_TRACING_V2', 'false').lower() == 'true'
+    api_key = os.getenv('LANGCHAIN_API_KEY')
+    
+    if tracing_enabled and api_key:
+        # Set default project name if not specified
+        if not os.getenv('LANGCHAIN_PROJECT'):
+            os.environ['LANGCHAIN_PROJECT'] = 'luna-deepagent'
+        
+        print(f"🔍 LangSmith tracing ENABLED - Project: {os.getenv('LANGCHAIN_PROJECT')}")
+        return True
+    else:
+        if tracing_enabled and not api_key:
+            print("⚠️  LangSmith tracing enabled but LANGCHAIN_API_KEY not set")
+        return False
+
+
+# Initialize LangSmith on module load
+_langsmith_enabled = setup_langsmith()
+
+
+# ============================================================================
 # LUNA SYSTEM PROMPT
 # ============================================================================
 
@@ -39,72 +82,55 @@ def get_luna_system_prompt(session_id: str = "default") -> str:
     Create the system prompt that defines Luna's personality and behavior.
     Luna is a free-thinking AI agent - no rigid workflows, just intelligent reasoning.
     """
-    return f"""You are Luna, an intelligent AI agent for One Development, a premier luxury real estate developer in the UAE.
+    return f"""You are Luna, an AI research agent for One Development (oneuae.com).
 
-## Who You Are
+## YOUR PRIMARY TOOL: search_knowledge_base
 
-I am **Luna** — not a chatbot following scripts, but a thinking AI agent. I reason, explore, and adapt to each unique conversation. I represent **One Development** (oneuae.com), a luxury real estate developer in the UAE.
+**ALWAYS use `search_knowledge_base` first** — it contains accurate project data.
 
-## How I Think
+For questions about One Development projects:
+→ Call: `search_knowledge_base(query="One Development projects portfolio")`
 
-I don't follow rigid workflows. Instead, I:
+For specific project details:
+→ Call: `search_knowledge_base(query="Laguna Residence")` (or project name)
 
-- **Reason freely** about what each user actually needs
-- **Choose my own path** — I decide which tools to use, in what order, or whether to use any at all
-- **Adapt dynamically** — every conversation is different, and I respond accordingly
-- **Think creatively** — I find connections, offer insights, and provide genuine value
-- **Stay curious** — I explore multiple angles when a question is interesting or complex
+## MANDATORY: Use Tools Before Answering
 
-## My Capabilities
+You MUST call a tool before responding to questions about One Development.
+DO NOT answer from memory — always search first.
 
-I have access to powerful tools and can think strategically about complex questions. I can break down tasks, verify information, and plan multi-step research.
+## Tool Priority (use in this order):
 
-**Core Tools:**
-- Search internal knowledge about One Development
-- Search the web and One Development's website
-- Read PDF brochures and documents directly
-- Access Dubai real estate market context
-- Remember user preferences and personalize responses
+1. **`search_knowledge_base(query)`** — BEST. Contains accurate project data. USE THIS FIRST.
+   - For projects: `search_knowledge_base(query="One Development projects")`
+   - For specific project: `search_knowledge_base(query="[project name]")`
 
-**Advanced Capabilities:**
-- **Plan research** for complex questions (break them into steps)
-- **Deep research** on specific topics with multiple sources
-- **Verify information** before presenting it
-- **Analyze pricing** and compare properties
-- **Identify user intent** to provide exactly what they need
-- **Summarize findings** from multiple sources
+2. **`search_uploaded_documents(query)`** — Search PDF brochures
 
-**Strategic Thinking:**
-When questions are complex, I can:
-1. Use `identify_user_intent` to understand what you really need
-2. Use `plan_research` to break down multi-step queries
-3. Execute the plan using appropriate tools
-4. Use `verify_information` to ensure accuracy
-5. Use `summarize_findings` to organize my research
-6. Provide a comprehensive, well-structured answer
+3. **`get_dubai_market_context(topic)`** — For market/pricing context
 
-## My Principles
+## Example Workflow
 
-**Be genuinely helpful** — My goal is to provide real value, not just information dumps.
+User: "Tell me about their projects"
 
-**Be honest** — I distinguish between what I know from One Development sources vs. general market data. I'm transparent about uncertainty.
+You should:
+1. Call `search_knowledge_base` with query="One Development projects portfolio"
+2. Read the returned content with project names
+3. Respond with the specific project names and URLs found
 
-**Be thoughtful** — I consider the user's underlying needs, not just their literal words.
+## KNOWN PROJECTS (verify via search):
 
-**Be resourceful** — If one approach doesn't work, I try another. I don't give up easily.
+Active: Laguna Residence, DO Dubai Islands, DO New Cairo
+Pipeline: Al Marjan Islands, Al Reem Islands Abu Dhabi, DO Riyadh, DO Athens, W55 Waterway Egypt
+Portfolio: https://oneuae.com/our-development
 
-**Be human** — I communicate naturally, with personality. I'm not robotic or formulaic.
+## Response Style
 
-## When I Don't Know Something
+✅ DO: "One Development's current projects include: Laguna Residence, DO Dubai Islands, DO New Cairo..."
+✅ DO: Include URLs like https://oneuae.com/development-detail?title=Laguna%20Residence
+❌ DON'T: Generic descriptions without specific project names
 
-I explore before concluding I can't help. But if I genuinely can't find something, I'm honest about it and offer a clear path forward (like contacting the sales team at oneuae.com).
-
-## Communication Style
-
-- Natural and conversational, not corporate or stiff
-- **Bold** for emphasis on key points
-- Concise but complete — I don't pad responses with filler
-- I end with actionable next steps when appropriate
+Be concise. Give specific project names. Include URLs.
 
 ## Current Context
 Session: {session_id}
@@ -112,7 +138,7 @@ Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 ---
 
-I think for myself. I reason through problems. I'm here to genuinely help, not to follow a script."""
+ALWAYS search knowledge base first. It has the latest project data."""
 
 
 # ============================================================================
@@ -135,8 +161,11 @@ def create_luna_agent(tools: List, llm: ChatOpenAI, system_prompt: str, max_iter
         Compiled LangGraph agent ready to use
     """
     
-    # Bind tools to LLM
-    llm_with_tools = llm.bind_tools(tools)
+    # Create two versions of the LLM:
+    # 1. One that FORCES tool usage (for first iteration - must research)
+    # 2. One that allows choosing (for subsequent iterations - can respond)
+    llm_force_tools = llm.bind_tools(tools, tool_choice="any")
+    llm_optional_tools = llm.bind_tools(tools)
     
     # Define the agent node
     def agent_node(state: MessagesState) -> Dict:
@@ -152,7 +181,20 @@ def create_luna_agent(tools: List, llm: ChatOpenAI, system_prompt: str, max_iter
         
         # Add system prompt
         system_message = SystemMessage(content=system_prompt)
-        response = llm_with_tools.invoke([system_message] + list(messages))
+        
+        # Check if this is the first iteration (no tool results yet)
+        has_tool_results = any(
+            isinstance(msg, ToolMessage) for msg in messages
+        )
+        
+        # FORCE tool usage on first call (must research before answering)
+        # Allow optional tools after we have research results
+        if not has_tool_results and iteration_count == 0:
+            # First call: MUST use a tool to research
+            response = llm_force_tools.invoke([system_message] + list(messages))
+        else:
+            # Subsequent calls: can choose to respond or use more tools
+            response = llm_optional_tools.invoke([system_message] + list(messages))
         
         return {
             "messages": [response],
@@ -218,10 +260,11 @@ class LunaDeepAgent:
         # Get all available tools (core + subagents + deepagent enhancements)
         self.tools = get_all_tools() + get_subagent_tools() + get_deepagent_tools()
         
-        # Create the LLM
+        # Create the LLM - using gpt-4o for better tool usage
+        # Lower temperature to make it more deterministic and follow instructions
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.7,
+            model="gpt-4o",  # Better at following instructions than gpt-4o-mini
+            temperature=0.3,  # Lower temperature = more deterministic, follows prompts better
             api_key=self.api_key
         )
         
@@ -233,7 +276,7 @@ class LunaDeepAgent:
             max_iterations=10
         )
         
-        print(f"✅ Luna Agent initialized with {len(self.tools)} tools")
+        print(f"✅ Luna Agent initialized with {len(self.tools)} tools (model: gpt-4o)")
     
     def process_query(
         self,
@@ -392,6 +435,54 @@ Is there something specific about One Development I can try to help you with?"""
         # For now, wrap the sync version
         # Can be enhanced with true async later
         return self.process_query(query, session_id, conversation_history)
+    
+    def add_knowledge(self, content: str, metadata: Dict[str, Any] = None):
+        """
+        Add content to the ChromaDB knowledge base.
+        
+        This enables PDF indexing and knowledge ingestion to work with LunaDeepAgent.
+        
+        Args:
+            content: Text content to add
+            metadata: Optional metadata dict (title, source, etc.)
+        """
+        try:
+            import chromadb
+            from chromadb.config import Settings
+            
+            # Get or create ChromaDB client
+            chroma_db_path = os.path.join(os.path.dirname(__file__), '..', 'chroma_db')
+            os.makedirs(chroma_db_path, exist_ok=True)
+            
+            client = chromadb.PersistentClient(
+                path=chroma_db_path,
+                settings=Settings(anonymized_telemetry=False, allow_reset=False)
+            )
+            
+            # Get or create collection
+            try:
+                collection = client.get_collection("onedevelopment_knowledge")
+            except:
+                collection = client.create_collection(
+                    name="onedevelopment_knowledge",
+                    metadata={"description": "Knowledge base for One Development"}
+                )
+            
+            # Generate unique ID
+            doc_id = f"doc_{datetime.now().timestamp()}"
+            
+            # Add to collection
+            collection.add(
+                documents=[content],
+                metadatas=[metadata or {}],
+                ids=[doc_id]
+            )
+            
+            title = metadata.get('title', 'Untitled') if metadata else 'Untitled'
+            print(f"✅ Added knowledge: {title[:50]}...")
+            
+        except Exception as e:
+            print(f"⚠️ Could not add to knowledge base: {str(e)}")
 
 
 # ============================================================================

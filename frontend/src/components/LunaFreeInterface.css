@@ -231,6 +231,168 @@
 }
 
 /* ===========================================
+   VOICE SELECTOR DROPDOWN
+   =========================================== */
+
+.voice-selector-container {
+  position: relative;
+}
+
+.voice-btn {
+  position: relative;
+}
+
+.voice-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 280px;
+  background: linear-gradient(180deg, rgba(37, 24, 69, 0.98) 0%, rgba(26, 15, 48, 0.98) 100%);
+  border: 1px solid var(--border-glow);
+  border-radius: 16px;
+  padding: 8px;
+  z-index: 1000;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(150, 107, 252, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  animation: voiceDropdownIn 0.25s ease-out;
+}
+
+@keyframes voiceDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.voice-dropdown-header {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--od-violet-light);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 6px;
+}
+
+.voice-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.voice-option:hover {
+  background: rgba(150, 107, 252, 0.15);
+  transform: translateX(4px);
+}
+
+.voice-option.selected {
+  background: linear-gradient(135deg, rgba(150, 107, 252, 0.25) 0%, rgba(212, 175, 55, 0.15) 100%);
+  border: 1px solid rgba(150, 107, 252, 0.4);
+}
+
+.voice-emoji {
+  font-size: 24px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(150, 107, 252, 0.15);
+  border-radius: 10px;
+}
+
+.voice-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voice-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-bright);
+}
+
+.voice-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.voice-check {
+  color: var(--od-gold);
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Floating Voice Selector (for Avatar-only interface) */
+.voice-selector-floating {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.voice-selector-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--border-glow);
+  background: linear-gradient(135deg, rgba(52, 26, 96, 0.9) 0%, rgba(26, 15, 48, 0.9) 100%);
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(150, 107, 252, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.voice-selector-btn:hover {
+  transform: scale(1.1);
+  border-color: var(--od-violet);
+  box-shadow: 
+    0 8px 30px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(150, 107, 252, 0.4);
+}
+
+.voice-selector-btn.active {
+  background: linear-gradient(135deg, var(--od-violet) 0%, var(--od-purple) 100%);
+  border-color: var(--od-violet-light);
+  box-shadow: 
+    0 8px 30px rgba(0, 0, 0, 0.4),
+    0 0 50px rgba(150, 107, 252, 0.5);
+}
+
+.voice-selector-floating .voice-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 300px;
+}
+
+/* ===========================================
    MAIN CONTENT
    =========================================== */
 
@@ -248,35 +410,101 @@
 
 /* Avatar-only layout: give Luna maximum space and keep UI ultra-minimal */
 .avatar-only .luna-content.avatar-only-content {
-  padding-top: 40px;
-  padding-bottom: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .avatar-only-section {
-  min-height: 70vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 30px;
+  justify-content: flex-end;
+  gap: 0;
+  padding-top: 20px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .avatar-only .luna-avatar {
-  width: 380px;
-  height: 380px;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin-bottom: 0;
 }
 
 .avatar-only .avatar-core {
-  width: 260px;
-  height: 260px;
+  width: 100%;
+  max-width: 380px;
+  height: auto;
 }
 
-.avatar-only .ring-1 { width: 410px; height: 410px; }
-.avatar-only .ring-2 { width: 340px; height: 340px; }
-.avatar-only .ring-3 { width: 290px; height: 290px; }
-
 .avatar-only-status {
-  margin-top: 10px;
+  margin-top: 20px;
+  position: relative;
+  z-index: 10;
+}
+
+/* Voice Waveform Container */
+.voice-waveform-container {
+  margin-top: 15px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, rgba(52, 26, 96, 0.6) 0%, rgba(26, 15, 48, 0.8) 100%);
+  border: 1px solid rgba(150, 107, 252, 0.3);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 10;
+}
+
+.microphone-waveform {
+  display: block;
+  border-radius: 8px;
+}
+
+/* Live Transcript Debug Display */
+.live-transcript-debug {
+  margin-top: 15px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(52, 26, 96, 0.5) 0%, rgba(26, 15, 48, 0.7) 100%);
+  border: 1px solid rgba(150, 107, 252, 0.25);
+  border-radius: 12px;
+  max-width: 500px;
+  text-align: center;
+  position: relative;
+  z-index: 10;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.transcript-label {
+  color: var(--od-violet-light);
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.transcript-text {
+  color: var(--text-bright);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.transcript-interim {
+  color: var(--od-violet-light);
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 .avatar-only-suggestions {
@@ -284,7 +512,9 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 20px;
+  position: relative;
+  z-index: 10;
 }
 
 .avatar-only-suggestion {
@@ -344,47 +574,24 @@
 
 .luna-avatar {
   position: relative;
-  width: 320px;
-  height: 320px;
+  width: 100%;
+  max-width: 500px;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* Orbital Rings - One Development Style */
+/* Hide all rings for clean natural look */
 .avatar-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid;
-  transition: all 0.5s ease;
+  display: none !important;
 }
 
-.ring-1 {
-  width: 340px;
-  height: 340px;
-  border-color: var(--od-violet);
-  opacity: 0.4;
-  animation: orbitSlow 30s linear infinite;
-  box-shadow: 
-    0 0 20px var(--od-violet-glow),
-    inset 0 0 20px var(--od-violet-glow);
-}
-
-.ring-2 {
-  width: 290px;
-  height: 290px;
-  border-color: var(--od-gold);
-  opacity: 0.3;
-  animation: orbitMedium 20s linear infinite reverse;
-  box-shadow: 0 0 15px var(--od-gold-glow);
-}
-
-.ring-3 {
-  width: 250px;
-  height: 250px;
-  border-color: var(--od-violet-light);
-  opacity: 0.25;
-  animation: orbitFast 15s linear infinite;
+.ring-1, .ring-2, .ring-3 {
+  display: none !important;
 }
 
 @keyframes orbitSlow {
@@ -473,101 +680,65 @@
   to { transform: rotate(360deg); }
 }
 
-/* Avatar Core - The Portal */
+/* Avatar Core - Full Natural Image */
 .avatar-core {
   position: relative;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  overflow: hidden;
-  perspective: 1000px;
+  width: 100%;
+  max-width: 450px;
+  height: auto;
+  overflow: visible;
+  border-radius: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .avatar-image {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  object-fit: contain;
   position: relative;
-  z-index: 2;
-  border-radius: 50%;
-  /* Radial gradient mask for smooth fade to background */
-  mask-image: radial-gradient(circle, black 60%, transparent 100%);
-  -webkit-mask-image: radial-gradient(circle, black 60%, transparent 100%);
+  z-index: 1;
+  border-radius: 0;
+  /* No mask needed - image has transparent background */
   transition: all 0.4s ease;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
 }
 
 /* Photorealistic avatar video */
 .avatar-video {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  object-fit: contain;
   position: relative;
-  z-index: 2;
-  border-radius: 50%;
-  /* Radial gradient mask for smooth fade to background */
-  mask-image: radial-gradient(circle, black 60%, transparent 100%);
-  -webkit-mask-image: radial-gradient(circle, black 60%, transparent 100%);
+  z-index: 1;
+  border-radius: 0;
+  /* No mask needed - video should blend naturally */
 }
 
-/* Simple mouth overlay to simulate lip movement on the photorealistic avatar */
+/* Mouth overlay - hidden for natural look */
 .avatar-mouth {
-  position: absolute;
-  top: 62%;
-  left: 50%;
-  width: 60px;
-  height: 12px;
-  transform-origin: center center;
-  border-radius: 999px;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 0, 0, 0.8) 0%,
-    rgba(0, 0, 0, 0.4) 45%,
-    transparent 100%
-  );
-  z-index: 3;
-  pointer-events: none;
-  transition: transform 0.08s ease-out, opacity 0.08s ease-out;
+  display: none !important;
 }
 
-.luna-avatar.speaking .avatar-image {
-  animation: avatarPulse 0.5s ease-in-out infinite alternate;
-  box-shadow: 
-    0 0 50px var(--od-gold-glow),
-    0 0 100px var(--od-violet-glow),
-    inset 0 0 20px rgba(0, 0, 0, 0.5);
+/* Clean static avatar - no distracting animations */
+.luna-avatar.speaking .avatar-image,
+.luna-avatar.idle .avatar-image,
+.luna-avatar.thinking .avatar-image,
+.luna-avatar.listening .avatar-image {
+  animation: none;
+  box-shadow: none;
 }
 
-@keyframes avatarPulse {
-  0% { transform: scale(1) rotate(-0.5deg); }
-  50% { transform: scale(1.02) rotate(0.5deg); }
-  100% { transform: scale(1.03) rotate(-0.3deg); }
-}
-
-/* Natural breathing animation for idle state */
-@keyframes avatarBreathe {
-  0%, 100% { transform: scale(1) translateY(0); }
-  50% { transform: scale(1.008) translateY(-1px); }
-}
-
-.luna-avatar.idle .avatar-image {
-  animation: avatarBreathe 4s ease-in-out infinite;
-}
-
-/* Engaged speaking animation - subtle head movement */
-@keyframes avatarSpeak {
-  0% { transform: scale(1) rotate(-0.3deg) translateY(0); }
-  25% { transform: scale(1.015) rotate(0.4deg) translateY(-1px); }
-  50% { transform: scale(1.02) rotate(-0.2deg) translateY(0); }
-  75% { transform: scale(1.015) rotate(0.3deg) translateY(-0.5px); }
-  100% { transform: scale(1) rotate(-0.3deg) translateY(0); }
-}
-
-.luna-avatar.speaking .avatar-image {
-  animation: avatarSpeak 0.8s ease-in-out infinite;
-}
-
-/* Speech Intensity Glow - Pulses with speech amplitude */
+/* Speech glow - hidden for natural look */
 .speech-glow {
+  display: none !important;
+}
+
+.speech-glow-hidden {
   position: absolute;
   inset: -15px;
   border-radius: 50%;
@@ -609,8 +780,12 @@
   box-shadow: 0 0 30px var(--od-violet-glow);
 }
 
-/* Epic Glow Effect */
+/* Glow Effect - hidden for natural look */
 .avatar-glow {
+  display: none !important;
+}
+
+.avatar-glow-hidden {
   position: absolute;
   inset: -30px;
   border-radius: 50%;
@@ -652,8 +827,12 @@
   100% { opacity: 0.8; filter: blur(60px); }
 }
 
-/* Magical Particles */
+/* Particles - hidden for natural look */
 .avatar-particles {
+  display: none !important;
+}
+
+.avatar-particles-hidden {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -1290,33 +1469,177 @@
 }
 
 /* ===========================================
-   AVATAR ONLY MODE - FULLSCREEN FOCUS
+   AVATAR ONLY MODE - CINEMATIC IMMERSIVE
+   Luna dominates the screen, status glued to her
    =========================================== */
 
 .avatar-only-content {
   justify-content: center;
-  padding: 40px 20px;
+  align-items: center;
+  padding: 0;
+  min-height: 100vh;
+  position: relative;
 }
 
 .avatar-only-section {
-  transform: scale(1.8);
-  margin-bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px 0;
+  margin: 0;
+  transform: none;
 }
 
-/* Make avatar larger in avatar-only mode */
+/* Cinematic avatar - crisp and focused */
 .avatar-only .luna-avatar {
-  width: 400px;
-  height: 400px;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .avatar-only .avatar-core {
-  width: 280px;
-  height: 280px;
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+  position: relative;
 }
 
-.avatar-only .ring-1 { width: 420px; height: 420px; }
-.avatar-only .ring-2 { width: 360px; height: 360px; }
-.avatar-only .ring-3 { width: 310px; height: 310px; }
+.avatar-only .avatar-image,
+.avatar-only .avatar-video {
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+  /* Subtle breathing animation for life-like feel */
+  animation: subtleBreathing 4s ease-in-out infinite;
+}
+
+@keyframes subtleBreathing {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.006); }
+}
+
+/* Disable breathing when video is playing */
+.avatar-only .luna-avatar.speaking .avatar-video,
+.avatar-only .luna-avatar.speaking .avatar-image {
+  animation: none;
+}
+
+/* Hide rings for cleaner look */
+.avatar-only .avatar-ring {
+  display: none;
+}
+
+/* Hide particles in avatar-only mode */
+.avatar-only .avatar-particles {
+  display: none;
+}
+
+/* Status bar glued to bottom of avatar */
+.avatar-only .avatar-only-status {
+  position: relative;
+  z-index: 100;
+  margin-top: -30px;
+  padding-bottom: 40px;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(to top, rgba(10, 5, 16, 0.95) 0%, rgba(10, 5, 16, 0.7) 50%, transparent 100%);
+  padding-top: 50px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Beautiful spotlight behind Luna */
+.avatar-only .avatar-core::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 130%;
+  height: 130%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(212, 175, 55, 0.12) 0%,
+    rgba(150, 107, 252, 0.08) 35%,
+    transparent 65%
+  );
+  z-index: -1;
+  pointer-events: none;
+  animation: spotlightPulse 5s ease-in-out infinite;
+}
+
+@keyframes spotlightPulse {
+  0%, 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.03); }
+}
+
+/* Enhanced spotlight when listening */
+.avatar-only .luna-avatar.listening .avatar-core::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 170, 0.15) 0%,
+    rgba(150, 107, 252, 0.1) 35%,
+    transparent 65%
+  );
+  animation: spotlightPulse 2s ease-in-out infinite;
+}
+
+/* Golden glow when speaking */
+.avatar-only .luna-avatar.speaking .avatar-core::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(212, 175, 55, 0.2) 0%,
+    rgba(233, 30, 140, 0.1) 35%,
+    transparent 65%
+  );
+  animation: spotlightPulse 1.5s ease-in-out infinite;
+}
+
+/* Soft vignette overlay for cinematic feel */
+.avatar-only::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center 70%,
+    transparent 20%,
+    rgba(10, 5, 16, 0.3) 60%,
+    rgba(10, 5, 16, 0.7) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Ensure content is above vignette */
+.avatar-only .luna-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* Suggestions centered with good spacing */
+.avatar-only .avatar-only-suggestions {
+  margin-top: 25px;
+  padding: 0 30px;
+  max-width: 600px;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Hide text input in avatar-only mode - voice only */
+.avatar-only .text-input-container,
+.avatar-only .text-form,
+.avatar-only .avatar-text-form {
+  display: none !important;
+}
 
 /* Video Generation Progress Bar */
 .video-progress-container {
@@ -1461,18 +1784,17 @@
   .ring-3 { width: 210px; height: 210px; }
 
   .avatar-only .luna-avatar {
-    width: 300px;
-    height: 300px;
+    max-width: 380px;
   }
 
   .avatar-only .avatar-core {
-    width: 200px;
-    height: 200px;
+    max-width: 360px;
   }
 
-  .avatar-only .ring-1 { width: 320px; height: 320px; }
-  .avatar-only .ring-2 { width: 270px; height: 270px; }
-  .avatar-only .ring-3 { width: 230px; height: 230px; }
+  .avatar-only .avatar-image,
+  .avatar-only .avatar-video {
+    max-width: 360px;
+  }
 
   .luna-title {
     font-size: 42px;
@@ -1517,18 +1839,22 @@
   .ring-3 { width: 180px; height: 180px; }
 
   .avatar-only .luna-avatar {
-    width: 240px;
-    height: 240px;
+    max-width: 340px;
   }
 
   .avatar-only .avatar-core {
-    width: 170px;
-    height: 170px;
+    max-width: 320px;
   }
 
-  .avatar-only .ring-1 { width: 260px; height: 260px; }
-  .avatar-only .ring-2 { width: 225px; height: 225px; }
-  .avatar-only .ring-3 { width: 195px; height: 195px; }
+  .avatar-only .avatar-image,
+  .avatar-only .avatar-video {
+    max-width: 320px;
+  }
+  
+  .avatar-only .avatar-only-status {
+    margin-top: -20px;
+    padding-top: 40px;
+  }
 
   .luna-title {
     font-size: 32px;

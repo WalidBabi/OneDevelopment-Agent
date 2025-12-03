@@ -142,3 +142,5 @@ curl -X POST http://YOUR_GPU_INSTANCE_IP:8001/generate \
 
 Much faster than CPU generation (2-5+ minutes)!
 
+
+

@@ -201,3 +201,5 @@ echo "Instance Public IP: $PUBLIC_IP"
 echo "Avatar Service URL: http://$PUBLIC_IP:8001"
 echo "=============================================="
 
+
+

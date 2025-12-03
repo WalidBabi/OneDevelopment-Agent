@@ -264,7 +264,8 @@ const ChatInterface = () => {
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [error, setError] = useState(null);
   const [conversations, setConversations] = useState([]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Start with sidebar collapsed on mobile devices
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth <= 768);
   const [currentThinking, setCurrentThinking] = useState([]);
   const [showThinking, setShowThinking] = useState(true);
   const [streamEvents, setStreamEvents] = useState([]);
@@ -283,6 +284,18 @@ const ChatInterface = () => {
   // Initialize: Load conversations and current session
   useEffect(() => {
     initializeApp();
+  }, []);
+
+  // Handle responsive sidebar state on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
@@ -371,6 +384,11 @@ const ChatInterface = () => {
     setMessages([]);
     setError(null);
     
+    // Auto-close sidebar on mobile after creating new conversation
+    if (window.innerWidth <= 768) {
+      setIsSidebarCollapsed(true);
+    }
+    
     // Reload conversations list
     loadConversations();
   };
@@ -380,6 +398,11 @@ const ChatInterface = () => {
     setSessionId(selectedSessionId);
     setMessages([]);
     setError(null);
+    
+    // Auto-close sidebar on mobile after selecting a conversation
+    if (window.innerWidth <= 768) {
+      setIsSidebarCollapsed(true);
+    }
     
     // Load the selected conversation
     await loadConversationHistory(selectedSessionId);

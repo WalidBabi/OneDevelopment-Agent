@@ -194,3 +194,5 @@ EOF
 echo ""
 echo -e "Instance info saved to: /tmp/gpu_instance_info.txt"
 
+
+

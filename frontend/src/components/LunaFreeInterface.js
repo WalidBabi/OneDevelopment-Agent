@@ -180,7 +180,7 @@ const charToViseme = (char) => {
   return VISEME_MAP.silence;
 };
 
-// Enhanced Web Speech Hook with better voice selection and realistic (but gentle) lip sync
+// Enhanced Speech Hook using OpenAI TTS - Super realistic voices!
 const useEnhancedSpeech = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentWord, setCurrentWord] = useState('');
@@ -189,128 +189,130 @@ const useEnhancedSpeech = () => {
   const [viseme, setViseme] = useState(VISEME_MAP.silence);
   const [mouthOpen, setMouthOpen] = useState(0);
   const [mouthWidth, setMouthWidth] = useState(0.5);
-  const utteranceRef = useRef(null);
+  const audioRef = useRef(null);
   const animationFrameRef = useRef(null);
-  const visemeIndexRef = useRef(0);
-  const textForVisemeRef = useRef('');
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
   const startTimeRef = useRef(0);
 
-  const getVoices = () => {
-    return new Promise((resolve) => {
-      let voices = window.speechSynthesis?.getVoices();
-      if (voices?.length) {
-        resolve(voices);
-      } else {
-        window.speechSynthesis?.addEventListener('voiceschanged', () => {
-          voices = window.speechSynthesis.getVoices();
-          resolve(voices);
-        }, { once: true });
-        setTimeout(() => resolve(window.speechSynthesis?.getVoices() || []), 100);
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
       }
-    });
-  };
-
-  const findBestVoice = async () => {
-    const voices = await getVoices();
-    
-    // Priority: Neural/Natural voices first (more realistic)
-    const preferredVoices = [
-      // Microsoft Neural voices (best quality)
-      'Microsoft Aria Online (Natural)',
-      'Microsoft Jenny Online (Natural)',
-      'Microsoft Aria Online',
-      'Microsoft Jenny',
-      'Microsoft Zira',
-      // Google voices (good quality)
-      'Google UK English Female',
-      'Google US English',
-      // Apple voices
-      'Samantha',
-      'Karen',
-      'Moira',
-      'Tessa',
-      'Fiona',
-      // Other quality voices
-      'Zira',
-      'Helena',
-      'Victoria',
-    ];
-
-    for (const preferred of preferredVoices) {
-      const voice = voices.find(v => 
-        v.name.toLowerCase().includes(preferred.toLowerCase())
-      );
-      if (voice) return voice;
-    }
-
-    // Fallback: prioritize voices with "natural" or "neural" in name
-    const neuralVoice = voices.find(v => 
-      v.lang.startsWith('en') && 
-      (v.name.toLowerCase().includes('natural') || 
-       v.name.toLowerCase().includes('neural'))
-    );
-    if (neuralVoice) return neuralVoice;
-
-    const englishFemale = voices.find(v => 
-      v.lang.startsWith('en') && 
-      (v.name.toLowerCase().includes('female') || 
-       v.name.toLowerCase().includes('woman') ||
-       /samantha|karen|zira|victoria|helena|moira/i.test(v.name))
-    );
-    if (englishFemale) return englishFemale;
-
-    return voices.find(v => v.lang.startsWith('en')) || voices[0];
-  };
-
-  // Animate lip sync based on text timing
-  const animateLipSync = useCallback((text, duration) => {
-    const chars = text.replace(/[^a-zA-Z\s]/g, '').split('');
-    const charDuration = duration / Math.max(chars.length, 1);
-    let charIndex = 0;
-    let lastViseme = VISEME_MAP.silence;
-    
-    const animate = () => {
-      const elapsed = Date.now() - startTimeRef.current;
-      charIndex = Math.min(Math.floor(elapsed / charDuration), chars.length - 1);
-      
-      const char = chars[charIndex] || ' ';
-      const targetViseme = charToViseme(char);
-      
-      // Smooth interpolation between visemes for natural movement
-      const smoothing = 0.25;
-      const newMouthOpen = lastViseme.mouthOpen + (targetViseme.mouthOpen - lastViseme.mouthOpen) * smoothing;
-      const newMouthWidth = lastViseme.mouthWidth + (targetViseme.mouthWidth - lastViseme.mouthWidth) * smoothing;
-      
-      // Add subtle natural variation
-      const variation = Math.sin(elapsed * 0.01) * 0.05;
-      
-      setMouthOpen(Math.max(0, Math.min(1, newMouthOpen + variation)));
-      setMouthWidth(Math.max(0.2, Math.min(1, newMouthWidth)));
-      setAmplitude(newMouthOpen * 0.8 + 0.2);
-      
-      lastViseme = { mouthOpen: newMouthOpen, mouthWidth: newMouthWidth };
-      
-      if (elapsed < duration) {
-        animationFrameRef.current = requestAnimationFrame(animate);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
+  }, []);
+
+  // Animate lip sync based on audio analysis
+  const animateLipSync = useCallback((text, audioElement) => {
+    if (!audioElement) return;
     
-    startTimeRef.current = Date.now();
+    const chars = text.replace(/[^a-zA-Z\s]/g, '').split('');
+    const words = text.split(' ');
+    let lastViseme = VISEME_MAP.silence;
+    let analyserNode = null;
+    let dataArray = null;
+    
+    // Try to set up audio analysis for more accurate lip sync
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      if (!analyserRef.current) {
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        analyserRef.current.smoothingTimeConstant = 0.8;
+        
+        const source = audioContextRef.current.createMediaElementSource(audioElement);
+        source.connect(analyserRef.current);
+        analyserRef.current.connect(audioContextRef.current.destination);
+      }
+      
+      analyserNode = analyserRef.current;
+      dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+    } catch (e) {
+      console.warn('Audio analysis not available, using fallback animation:', e.message);
+    }
+    
+    const animate = () => {
+      if (!audioElement || audioElement.paused || audioElement.ended) {
+        setMouthOpen(0);
+        setMouthWidth(0.5);
+        setAmplitude(0);
+        return;
+      }
+      
+      let normalizedAmplitude = 0;
+      
+      // Try to get actual audio data if analyser is available
+      if (analyserNode && dataArray) {
+        try {
+          analyserNode.getByteFrequencyData(dataArray);
+          const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          normalizedAmplitude = Math.min(avg / 128, 1);
+        } catch (e) {
+          // Fall back to text-based estimation
+          normalizedAmplitude = 0.5;
+        }
+      } else {
+        // Fallback: estimate amplitude based on text position
+        normalizedAmplitude = 0.5 + Math.sin(Date.now() * 0.01) * 0.2;
+      }
+      
+      // Calculate progress
+      const progress = (audioElement.currentTime / audioElement.duration) * 100;
+      setSpeechProgress(progress);
+      
+      // Estimate current word
+      const wordIndex = Math.floor((progress / 100) * words.length);
+      setCurrentWord(words[Math.min(wordIndex, words.length - 1)] || '');
+      
+      // Estimate current character for viseme
+      const charIndex = Math.floor((progress / 100) * chars.length);
+      const char = chars[Math.min(charIndex, chars.length - 1)] || ' ';
+      const targetViseme = charToViseme(char);
+      
+      // Smooth interpolation between visemes
+      const newMouthOpen = lastViseme.mouthOpen + (targetViseme.mouthOpen - lastViseme.mouthOpen) * 0.3;
+      const newMouthWidth = lastViseme.mouthWidth + (targetViseme.mouthWidth - lastViseme.mouthWidth) * 0.3;
+      
+      // Blend with actual audio amplitude for more natural movement
+      const audioMouthOpen = normalizedAmplitude * 0.8;
+      const blendedMouthOpen = (newMouthOpen * 0.4) + (audioMouthOpen * 0.6);
+      
+      // Add subtle natural variation
+      const variation = Math.sin(Date.now() * 0.01) * 0.05;
+      
+      setMouthOpen(Math.max(0, Math.min(1, blendedMouthOpen + variation)));
+      setMouthWidth(Math.max(0.2, Math.min(1, newMouthWidth)));
+      setAmplitude(normalizedAmplitude);
+      
+      lastViseme = { mouthOpen: blendedMouthOpen, mouthWidth: newMouthWidth };
+      
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    
     animate();
   }, []);
 
-  const speak = useCallback(async (rawText, onEnd) => {
-    if (!window.speechSynthesis) {
-      console.warn('Speech synthesis not supported');
-      onEnd?.();
-      return;
+  const speak = useCallback(async (rawText, onEnd, voice = 'nova') => {
+    // Stop any current audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
     }
-
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
+
+    // Reset audio context for new audio
+    analyserRef.current = null;
 
     // Sanitize text for natural speech
     const text = sanitizeTextForSpeech(rawText);
@@ -319,69 +321,96 @@ const useEnhancedSpeech = () => {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utteranceRef.current = utterance;
-    textForVisemeRef.current = text;
+    console.log(`🎤 Generating OpenAI TTS (${voice}) for:`, text.substring(0, 50) + '...');
+    setIsSpeaking(true);
 
-    // Get the best available voice
-    const voice = await findBestVoice();
-    if (voice) {
-      utterance.voice = voice;
-      console.log('Using voice:', voice.name);
+    try {
+      // Call OpenAI TTS via backend with selected voice
+      const { audioUrl } = await chatService.generateTTS(text, voice);
+      
+      console.log('✅ TTS audio received, playing...');
+      
+      // Create and play audio
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onplay = () => {
+        console.log('🔊 Audio playing');
+        // Start lip sync animation with audio element
+        animateLipSync(text, audio);
+      };
+      
+      audio.onended = () => {
+        console.log('🔇 Audio ended');
+        setIsSpeaking(false);
+        setCurrentWord('');
+        setSpeechProgress(0);
+        setAmplitude(0);
+        setMouthOpen(0);
+        setMouthWidth(0.5);
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        // Revoke the blob URL to free memory
+        URL.revokeObjectURL(audioUrl);
+        onEnd?.();
+      };
+      
+      audio.onerror = (event) => {
+        console.error('Audio playback error:', event);
+        setIsSpeaking(false);
+        setAmplitude(0);
+        setMouthOpen(0);
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        URL.revokeObjectURL(audioUrl);
+        onEnd?.();
+      };
+      
+      // Resume audio context if suspended (browser autoplay policy)
+      if (audioContextRef.current?.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      
+      await audio.play();
+      
+    } catch (error) {
+      console.error('TTS error:', error);
+      setIsSpeaking(false);
+      setAmplitude(0);
+      setMouthOpen(0);
+      
+      // Fallback to browser speech synthesis if OpenAI fails
+      console.log('⚠️ Falling back to browser speech synthesis');
+      if (window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          onEnd?.();
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          onEnd?.();
+        };
+        utterance.onstart = () => setIsSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        onEnd?.();
+      }
     }
-
-    // Natural but calm speech settings - keep fairly consistent (light monotony)
-    utterance.rate = 0.95;   // slightly slower than default for clarity
-    utterance.pitch = 1.0;   // neutral pitch to avoid robotic swings
-    utterance.volume = 1.0;
-
-    const words = text.split(' ');
-    let wordIndex = 0;
-    let estimatedDuration = text.length * 65; // ~65ms per character estimate
-
-    utterance.onboundary = (event) => {
-      if (event.name === 'word') {
-        const word = words[wordIndex] || '';
-        setCurrentWord(word);
-        wordIndex++;
-        setSpeechProgress((wordIndex / words.length) * 100);
-      }
-    };
-
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      // Start lip sync animation
-      animateLipSync(text, estimatedDuration);
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setCurrentWord('');
-      setSpeechProgress(0);
-      setAmplitude(0);
-      setMouthOpen(0);
-      setMouthWidth(0.5);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      onEnd?.();
-    };
-
-    utterance.onerror = (event) => {
-      console.error('Speech error:', event);
-      setIsSpeaking(false);
-      setAmplitude(0);
-      setMouthOpen(0);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      onEnd?.();
-    };
-
-    window.speechSynthesis.speak(utterance);
   }, [animateLipSync]);
 
   const stop = useCallback(() => {
+    // Stop OpenAI TTS audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    // Also stop any browser speech synthesis (fallback)
     window.speechSynthesis?.cancel();
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -403,21 +432,181 @@ const useEnhancedSpeech = () => {
     amplitude,
     mouthOpen,
     mouthWidth,
-    isSupported: !!window.speechSynthesis 
+    isSupported: true  // OpenAI TTS is always available via backend
   };
 };
 
-// Speech Recognition Hook
-const useSpeechRecognition = () => {
+// Speech Recognition Hook with Audio Waveform and Auto-Send
+const useSpeechRecognition = (onAutoSend) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [error, setError] = useState(null);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [waveformData, setWaveformData] = useState(new Array(32).fill(0));
   const recognitionRef = useRef(null);
   const isInitializedRef = useRef(false);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
+  const lastSpeechTimeRef = useRef(Date.now());
+  const hasSpokenRef = useRef(false);
+  const fullTranscriptRef = useRef('');
+
+  const SILENCE_TIMEOUT = 2000; // 2 seconds of silence to auto-send
 
   const isSupported = typeof window !== 'undefined' && 
     (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  // Start audio analyzer for waveform visualization
+  const startAudioAnalyzer = useCallback(async () => {
+    try {
+      // Stop any existing analyzer first
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        await audioContextRef.current.close().catch(() => {});
+      }
+
+      console.log('🎤 Requesting microphone for waveform...');
+      
+      // Get the default audio input device
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: false, // Disable to get raw audio
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1
+        } 
+      });
+      mediaStreamRef.current = stream;
+      
+      // Log which device we're using
+      const audioTrack = stream.getAudioTracks()[0];
+      console.log('✅ Got microphone:', audioTrack.label);
+
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Resume audio context if suspended (browser policy)
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+        console.log('✅ Audio context resumed');
+      }
+
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      analyserRef.current.smoothingTimeConstant = 0.5;
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyserRef.current);
+
+      // Use TIME DOMAIN data for more responsive waveform (actual sound wave)
+      const bufferLength = analyserRef.current.fftSize;
+      const timeDataArray = new Uint8Array(bufferLength);
+      const freqDataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+
+      const updateWaveform = () => {
+        if (!analyserRef.current || !audioContextRef.current) return;
+        
+        // Get time domain data (actual waveform)
+        analyserRef.current.getByteTimeDomainData(timeDataArray);
+        // Also get frequency data for level
+        analyserRef.current.getByteFrequencyData(freqDataArray);
+        
+        // Calculate RMS level from time domain (more accurate for speech)
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const value = (timeDataArray[i] - 128) / 128; // Normalize to -1 to 1
+          sum += value * value;
+        }
+        const rms = Math.sqrt(sum / bufferLength);
+        const normalizedLevel = Math.min(rms * 3, 1); // Amplify RMS
+        setAudioLevel(normalizedLevel);
+        
+        // Create waveform from time domain data - sample 32 points
+        const waveform = [];
+        const step = Math.floor(bufferLength / 32);
+        for (let i = 0; i < 32; i++) {
+          // Convert from 0-255 to 0-1 range, centered at 0.5
+          const raw = timeDataArray[i * step];
+          const value = Math.abs(raw - 128) / 128; // Distance from center
+          waveform.push(value);
+        }
+        setWaveformData(waveform);
+
+        // Check for speech activity
+        if (normalizedLevel > 0.02) {
+          lastSpeechTimeRef.current = Date.now();
+          hasSpokenRef.current = true;
+        }
+
+        animationFrameRef.current = requestAnimationFrame(updateWaveform);
+      };
+
+      updateWaveform();
+      console.log('🎤 Audio analyzer started successfully!');
+    } catch (e) {
+      console.error('❌ Failed to start audio analyzer:', e);
+    }
+  }, []);
+
+  // Stop audio analyzer
+  const stopAudioAnalyzer = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+    }
+    analyserRef.current = null;
+    audioContextRef.current = null;
+    mediaStreamRef.current = null;
+    setAudioLevel(0);
+    setWaveformData(new Array(32).fill(0));
+  }, []);
+
+  // Check for silence and auto-send
+  useEffect(() => {
+    if (!isListening) return;
+
+    const checkSilence = () => {
+      const timeSinceLastSpeech = Date.now() - lastSpeechTimeRef.current;
+      const currentTranscript = fullTranscriptRef.current || interimTranscript;
+      
+      // Auto-send if: has spoken, has transcript, and silence for SILENCE_TIMEOUT
+      if (hasSpokenRef.current && currentTranscript.trim() && timeSinceLastSpeech > SILENCE_TIMEOUT) {
+        console.log('🔇 Auto-sending after silence:', currentTranscript);
+        const textToSend = currentTranscript.trim();
+        
+        // Reset before sending
+        hasSpokenRef.current = false;
+        fullTranscriptRef.current = '';
+        setTranscript('');
+        setInterimTranscript('');
+        
+        if (onAutoSend) {
+          onAutoSend(textToSend);
+        }
+      }
+    };
+
+    silenceTimeoutRef.current = setInterval(checkSilence, 300);
+
+    return () => {
+      if (silenceTimeoutRef.current) {
+        clearInterval(silenceTimeoutRef.current);
+      }
+    };
+  }, [isListening, interimTranscript, onAutoSend]);
 
   // Initialize recognition on mount
   useEffect(() => {
@@ -426,7 +615,7 @@ const useSpeechRecognition = () => {
     try {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
+      recognitionRef.current.continuous = true; // Keep listening
       recognitionRef.current.interimResults = true;
       recognitionRef.current.lang = 'en-US';
       recognitionRef.current.maxAlternatives = 1;
@@ -444,8 +633,13 @@ const useSpeechRecognition = () => {
           }
         }
         
+        // Update last speech time when we get results
+        lastSpeechTimeRef.current = Date.now();
+        hasSpokenRef.current = true;
+        
         if (final) {
-          setTranscript(final);
+          fullTranscriptRef.current += ' ' + final;
+          setTranscript(fullTranscriptRef.current.trim());
           setInterimTranscript('');
         } else {
           setInterimTranscript(interim);
@@ -453,47 +647,50 @@ const useSpeechRecognition = () => {
       };
 
       recognitionRef.current.onend = () => {
-        console.log('Speech recognition ended');
-        setIsListening(false);
+        console.log('Speech recognition ended, restarting...');
+        // Auto-restart if still supposed to be listening
+        if (recognitionRef.current && isListening) {
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start();
+            } catch (e) {
+              console.log('Restart failed:', e);
+            }
+          }, 100);
+        }
       };
       
       recognitionRef.current.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         setError(event.error);
-        setIsListening(false);
         
-        // Handle specific errors
         if (event.error === 'not-allowed') {
-          alert('Microphone access denied. Please allow microphone access and reload the page.');
+          setIsListening(false);
+          stopAudioAnalyzer();
         } else if (event.error === 'no-speech') {
-          // No speech detected, just reset silently
-          console.log('No speech detected');
+          // No speech detected, keep listening
+          console.log('No speech detected, continuing...');
         }
       };
 
-      recognitionRef.current.onaudiostart = () => {
-        console.log('Audio capture started');
-      };
-
       isInitializedRef.current = true;
-      console.log('Speech recognition initialized successfully');
+      console.log('Speech recognition initialized');
     } catch (e) {
       console.error('Failed to initialize speech recognition:', e);
       setError('initialization_failed');
     }
 
     return () => {
+      stopAudioAnalyzer();
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
-        } catch (e) {
-          // Ignore abort errors
-        }
+        } catch (e) {}
       }
     };
-  }, [isSupported]);
+  }, [isSupported, stopAudioAnalyzer, isListening]);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     if (!recognitionRef.current) {
       console.error('Speech recognition not initialized');
       setError('not_initialized');
@@ -501,47 +698,30 @@ const useSpeechRecognition = () => {
     }
     
     // Reset state
+    fullTranscriptRef.current = '';
     setTranscript('');
     setInterimTranscript('');
     setError(null);
-    setIsListening(true); // Set immediately for UI feedback
+    hasSpokenRef.current = false;
+    lastSpeechTimeRef.current = Date.now();
+    setIsListening(true);
+    
+    // Start audio analyzer for waveform
+    await startAudioAnalyzer();
     
     try {
-      // Stop any existing session first
-      try {
-        recognitionRef.current.abort();
-      } catch (e) {
-        // Ignore abort errors
-      }
+      try { recognitionRef.current.abort(); } catch (e) {}
       
-      // Start fresh after a tiny delay to ensure clean state
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         try {
           recognitionRef.current.start();
-          console.log('Speech recognition started successfully');
+          console.log('🎤 Speech recognition started');
         } catch (e) {
           console.error('Failed to start recognition:', e);
           setIsListening(false);
           setError('start_failed');
-          
-          // If it's an "already started" error, try again
-          if (e.message?.includes('already started')) {
-            try {
-              recognitionRef.current.stop();
-              setTimeout(() => {
-                try {
-                  recognitionRef.current.start();
-                  setIsListening(true);
-                } catch (e2) {
-                  console.error('Retry failed:', e2);
-                }
-              }, 200);
-            } catch (e2) {
-              console.error('Stop failed:', e2);
-            }
-          }
         }
-      });
+      }, 100);
       
       return true;
     } catch (e) {
@@ -550,22 +730,24 @@ const useSpeechRecognition = () => {
       setError('start_failed');
       return false;
     }
-  }, []);
+  }, [startAudioAnalyzer]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        // Ignore stop errors
-      }
+      try { recognitionRef.current.stop(); } catch (e) {}
     }
+    stopAudioAnalyzer();
     setIsListening(false);
-  }, []);
+    if (silenceTimeoutRef.current) {
+      clearInterval(silenceTimeoutRef.current);
+    }
+  }, [stopAudioAnalyzer]);
 
   const clearTranscript = useCallback(() => {
+    fullTranscriptRef.current = '';
     setTranscript('');
     setInterimTranscript('');
+    hasSpokenRef.current = false;
   }, []);
 
   return { 
@@ -576,8 +758,121 @@ const useSpeechRecognition = () => {
     stopListening, 
     clearTranscript,
     isSupported,
-    error
+    error,
+    audioLevel,
+    waveformData
   };
+};
+
+// Microphone Waveform Visualizer - Shows voice input in real-time
+const MicrophoneWaveform = ({ waveformData, isListening, audioLevel }) => {
+  const canvasRef = useRef(null);
+  const animationRef = useRef(null);
+  const smoothedDataRef = useRef(new Array(32).fill(0));
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const barCount = 32;
+    const barWidth = (width / barCount) - 2;
+    const barGap = 2;
+
+    const draw = () => {
+      // Clear canvas with slight fade for trail effect
+      ctx.fillStyle = 'rgba(10, 5, 16, 0.3)';
+      ctx.fillRect(0, 0, width, height);
+
+      if (isListening && waveformData) {
+        // Smooth the waveform data for nicer animation
+        for (let i = 0; i < barCount; i++) {
+          const target = (waveformData[i] || 0) * 1.5; // Amplify
+          smoothedDataRef.current[i] += (target - smoothedDataRef.current[i]) * 0.3;
+        }
+
+        // Draw waveform bars from center
+        for (let i = 0; i < barCount; i++) {
+          const value = Math.min(1, smoothedDataRef.current[i]);
+          const barHeight = Math.max(4, value * height * 0.9);
+          
+          const x = i * (barWidth + barGap);
+          const y = (height - barHeight) / 2;
+
+          // Create gradient for each bar
+          const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+          
+          if (value > 0.1) {
+            // Active bars - purple to gold gradient
+            gradient.addColorStop(0, `rgba(150, 107, 252, ${0.6 + value * 0.4})`);
+            gradient.addColorStop(0.5, `rgba(212, 175, 55, ${0.5 + value * 0.5})`);
+            gradient.addColorStop(1, `rgba(150, 107, 252, ${0.6 + value * 0.4})`);
+          } else {
+            // Quiet bars - dim purple
+            gradient.addColorStop(0, 'rgba(150, 107, 252, 0.3)');
+            gradient.addColorStop(1, 'rgba(150, 107, 252, 0.3)');
+          }
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, y, barWidth, barHeight);
+          
+          // Glow effect for loud bars
+          if (value > 0.4) {
+            ctx.shadowColor = 'rgba(212, 175, 55, 0.8)';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(x, y, barWidth, barHeight);
+            ctx.shadowBlur = 0;
+          }
+        }
+
+        // Audio level indicator circle
+        const levelRadius = 5 + audioLevel * 10;
+        ctx.beginPath();
+        ctx.arc(width - 15, height / 2, levelRadius, 0, Math.PI * 2);
+        ctx.fillStyle = audioLevel > 0.1 
+          ? `rgba(0, 212, 170, ${0.5 + audioLevel * 0.5})` 
+          : 'rgba(150, 107, 252, 0.3)';
+        ctx.fill();
+
+      } else {
+        // Idle state - subtle pulse line
+        const time = Date.now() * 0.002;
+        ctx.strokeStyle = 'rgba(150, 107, 252, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        for (let x = 0; x < width; x++) {
+          const y = height / 2 + Math.sin(x * 0.05 + time) * 3;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        
+        // Reset smoothed data when not listening
+        smoothedDataRef.current = new Array(32).fill(0);
+      }
+
+      animationRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [waveformData, isListening, audioLevel]);
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      width={320} 
+      height={60} 
+      className="microphone-waveform"
+    />
+  );
 };
 
 // Epic Audio Visualizer Canvas Component - One Development Colors
@@ -725,6 +1020,9 @@ const GREETINGS = [
   "Let's find your dream property",
 ];
 
+// Luna's voice - Shimmer (expressive female)
+const LUNA_VOICE = 'shimmer';
+
 // Main Component - Full Voice + Avatar Experience
 const LunaFreeInterface = () => {
   const [messages, setMessages] = useState([]);
@@ -817,8 +1115,8 @@ const LunaFreeInterface = () => {
       setMessages(prev => [...prev, lunaMsg]);
       setLatestResponse(responseText);
 
-      // Speak the response
-      speech.speak(responseText);
+      // Speak the response with Luna's voice
+      speech.speak(responseText, null, LUNA_VOICE);
 
     } catch (err) {
       console.error('Error:', err);
@@ -829,7 +1127,7 @@ const LunaFreeInterface = () => {
         content: errorMsg,
         timestamp: new Date(),
       }]);
-      speech.speak(errorMsg);
+      speech.speak(errorMsg, null, LUNA_VOICE);
     } finally {
       setIsProcessing(false);
     }
@@ -1100,15 +1398,75 @@ const LunaAvatarInterface = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
   const [lastVideoUrl, setLastVideoUrl] = useState(null); // Store last video for replay
+  const [lastResponseText, setLastResponseText] = useState(null); // Store last response for audio replay
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  // Avatar service - enabled for SadTalker video generation
   const [avatarServiceAvailable, setAvatarServiceAvailable] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [inputText, setInputText] = useState(''); // Text input state
+  const [micPermission, setMicPermission] = useState('pending'); // 'pending', 'granted', 'denied'
+  const [debugTranscript, setDebugTranscript] = useState(''); // For debugging
   const videoRef = useRef(null);
   const progressIntervalRef = useRef(null);
+  const autoRestartTimeoutRef = useRef(null);
+  const sendMessageRef = useRef(null);
 
   const speech = useEnhancedSpeech();
-  const recognition = useSpeechRecognition();
+  
+  // Auto-send callback for speech recognition
+  const handleAutoSend = useCallback((text) => {
+    console.log('📤 Auto-sending:', text);
+    setDebugTranscript(text); // Show what was heard
+    // Clear debug after 3 seconds
+    setTimeout(() => setDebugTranscript(''), 3000);
+    
+    if (sendMessageRef.current && !isProcessing) {
+      sendMessageRef.current(text);
+    }
+  }, [isProcessing]);
+
+  const recognition = useSpeechRecognition(handleAutoSend);
+
+  // Request microphone permission on mount
+  useEffect(() => {
+    const requestMicPermission = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Permission granted - keep the stream active for continuous listening
+        stream.getTracks().forEach(track => track.stop());
+        setMicPermission('granted');
+        console.log('Microphone permission granted');
+      } catch (err) {
+        console.error('Microphone permission error:', err);
+        setMicPermission('denied');
+      }
+    };
+
+    requestMicPermission();
+  }, []);
+
+  // Auto-start listening when permission is granted and not busy
+  useEffect(() => {
+    if (micPermission === 'granted' && 
+        recognition.isSupported && 
+        !recognition.isListening && 
+        !isProcessing && 
+        !speech.isSpeaking && 
+        !isVideoPlaying &&
+        !isGeneratingVideo) {
+      // Small delay to avoid rapid restarts
+      autoRestartTimeoutRef.current = setTimeout(() => {
+        recognition.startListening();
+      }, 500);
+    }
+
+    return () => {
+      if (autoRestartTimeoutRef.current) {
+        clearTimeout(autoRestartTimeoutRef.current);
+      }
+    };
+  }, [micPermission, recognition.isSupported, recognition.isListening, isProcessing, speech.isSpeaking, isVideoPlaying, isGeneratingVideo, recognition]);
 
   // Init session & suggestions
   useEffect(() => {
@@ -1133,20 +1491,25 @@ const LunaAvatarInterface = () => {
       }
     };
 
-    // Check if avatar service is available
+    // Check if avatar service (SadTalker) is available
     const checkAvatarService = async () => {
       try {
         const health = await chatService.avatarHealth();
-        setAvatarServiceAvailable(health.status === 'healthy');
-        console.log('Avatar service status:', health.status);
-      } catch {
+        if (health.status === 'healthy') {
+          console.log('✅ Avatar service available:', health);
+          setAvatarServiceAvailable(true);
+        } else {
+          console.log('⚠️ Avatar service not available, using TTS fallback');
+          setAvatarServiceAvailable(false);
+        }
+      } catch (error) {
+        console.log('⚠️ Avatar service check failed, using TTS fallback:', error);
         setAvatarServiceAvailable(false);
-        console.log('Avatar service unavailable, using fallback TTS');
       }
     };
 
     loadSuggestions();
-    checkAvatarService();
+    checkAvatarService(); // Check on startup
   }, []);
 
   // Track Luna's high-level state
@@ -1162,7 +1525,20 @@ const LunaAvatarInterface = () => {
     }
   }, [speech.isSpeaking, recognition.isListening, isProcessing, isVideoPlaying, isGeneratingVideo]);
 
-  const sendMessage = useCallback(
+  // Keep sendMessage ref updated for auto-send callback
+  useEffect(() => {
+    sendMessageRef.current = (text) => {
+      if (!text?.trim() || !sessionId || isProcessing) return;
+      recognition.stopListening();
+      recognition.clearTranscript();
+      // Use setTimeout to avoid state issues
+      setTimeout(() => {
+        sendMessageInternal(text);
+      }, 100);
+    };
+  });
+
+  const sendMessageInternal = useCallback(
     async (messageText) => {
       if (!messageText?.trim() || !sessionId) return;
       if (isProcessing) return;
@@ -1209,7 +1585,7 @@ const LunaAvatarInterface = () => {
               setIsGeneratingVideo(false);
               setVideoProgress(0);
               // Only speak if video generation completely failed
-              speech.speak(responseText);
+              speech.speak(responseText, null, LUNA_VOICE);
             } else {
               // Got video! Play it - DO NOT SPEAK, video has audio!
               console.log('Avatar video generated:', avatarResult.video_url);
@@ -1234,46 +1610,40 @@ const LunaAvatarInterface = () => {
             setIsGeneratingVideo(false);
             setVideoProgress(0);
             // Only speak if there was an error
-            speech.speak(responseText);
+            speech.speak(responseText, null, LUNA_VOICE);
           }
         } else {
           // Avatar service not available, use TTS
-          speech.speak(responseText);
+          setLastResponseText(responseText); // Save for replay
+          speech.speak(responseText, null, LUNA_VOICE);
         }
       } catch (err) {
         console.error('Avatar interface error:', err);
-        speech.speak("I'm having trouble connecting right now. Please try again in a moment.");
+        speech.speak("I'm having trouble connecting right now. Please try again in a moment.", null, LUNA_VOICE);
       } finally {
         setIsProcessing(false);
       }
     },
-    [isProcessing, sessionId, speech, avatarServiceAvailable]
+    [isProcessing, sessionId, speech, avatarServiceAvailable, LUNA_VOICE]
   );
 
+  // Alias for compatibility
+  const sendMessage = sendMessageInternal;
+
   const handleAvatarClick = () => {
-    if (!recognition.isSupported) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge for the full Luna experience.');
-      return;
-    }
-
-    // If currently listening, stop and send what we heard
-    if (recognition.isListening) {
-      recognition.stopListening();
-      const textToSend = recognition.transcript || recognition.interimTranscript;
-      if (textToSend?.trim()) {
-        setTimeout(() => sendMessage(textToSend), 300);
-      }
-      return;
-    }
-
-    // If speaking, stop speech
+    // If speaking, stop speech (will auto-resume listening)
     if (speech.isSpeaking) {
       speech.stop();
       return;
     }
 
-    // Otherwise, start listening
-    recognition.startListening();
+    // If we have a transcript, send it
+    const textToSend = recognition.transcript || recognition.interimTranscript;
+    if (textToSend?.trim()) {
+      recognition.stopListening();
+      setInputText('');
+      setTimeout(() => sendMessage(textToSend), 100);
+    }
   };
 
   const handleSuggestionClick = (q) => {
@@ -1283,38 +1653,81 @@ const LunaAvatarInterface = () => {
     sendMessage(q);
   };
 
-  // Replay the last video answer
+  // Handle text form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (inputText.trim()) {
+      if (speech.isSpeaking) speech.stop();
+      if (recognition.isListening) recognition.stopListening();
+      sendMessage(inputText);
+      setInputText('');
+    }
+  };
+
+  // Sync voice transcript to text input
+  useEffect(() => {
+    const text = recognition.transcript || recognition.interimTranscript;
+    if (text) setInputText(text);
+  }, [recognition.transcript, recognition.interimTranscript]);
+
+  // Auto-send when a final transcript is received
+  useEffect(() => {
+    if (recognition.transcript && recognition.transcript.trim() && !isProcessing) {
+      // Small delay to allow for any additional words
+      const sendTimeout = setTimeout(() => {
+        const textToSend = recognition.transcript.trim();
+        if (textToSend) {
+          setInputText('');
+          recognition.clearTranscript();
+          sendMessage(textToSend);
+        }
+      }, 1000); // Wait 1 second after final transcript before sending
+
+      return () => clearTimeout(sendTimeout);
+    }
+  }, [recognition.transcript, recognition, isProcessing, sendMessage]);
+
+  // Replay the last answer (video or audio)
   const handleReplay = () => {
-    if (!lastVideoUrl) return;
-    
     // Stop any ongoing processes
     if (speech.isSpeaking) speech.stop();
     if (recognition.isListening) recognition.stopListening();
     
-    // Set video URL to replay
-    setCurrentVideoUrl(lastVideoUrl);
-    setIsVideoPlaying(true);
-    
-    // Force video to play from start
-    setTimeout(() => {
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(err => {
-          console.error('Replay error:', err);
-          setIsVideoPlaying(false);
-        });
-      }
-    }, 50);
+    // If we have a video, replay it
+    if (lastVideoUrl) {
+      setCurrentVideoUrl(lastVideoUrl);
+      setIsVideoPlaying(true);
+      
+      // Force video to play from start
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+          videoRef.current.play().catch(err => {
+            console.error('Replay error:', err);
+            setIsVideoPlaying(false);
+          });
+        }
+      }, 50);
+    } 
+    // Otherwise replay the audio response
+    else if (lastResponseText) {
+      speech.speak(lastResponseText, null, LUNA_VOICE);
+    }
   };
+  
+  // Check if replay is available
+  const canReplay = (lastVideoUrl || lastResponseText) && !currentVideoUrl && !isGeneratingVideo && !isProcessing && !speech.isSpeaking;
 
   const statusLabel = (() => {
     if (!recognition.isSupported) return 'Voice not supported in this browser';
-    if (lunaState === 'listening') return 'Listening...';
-    if (isVideoPlaying || currentVideoUrl) return 'Playing response...';
-    if (lunaState === 'speaking') return 'Answering...';
-    if (isGeneratingVideo) return 'Generating video...';
-    if (lunaState === 'thinking') return 'Thinking...';
-    return 'Tap on Luna and speak';
+    if (micPermission === 'pending') return 'Requesting microphone access...';
+    if (micPermission === 'denied') return '🎤 Microphone access denied - please allow in browser settings';
+    if (lunaState === 'listening') return '🎤 Listening... (tap Luna to send)';
+    if (isVideoPlaying || currentVideoUrl) return '🎬 Luna is speaking...';
+    if (lunaState === 'speaking') return '💬 Answering...';
+    if (isGeneratingVideo) return `🎬 Generating video... ${videoProgress}%`;
+    if (lunaState === 'thinking') return '🧠 Thinking...';
+    return '🎤 Ready to listen...';
   })();
 
   return (
@@ -1369,16 +1782,7 @@ const LunaAvatarInterface = () => {
                 <img src="/Luna.png" alt="Luna" className="avatar-image" />
               )}
 
-              {/* Lip sync overlay - only show when using TTS fallback */}
-              {!currentVideoUrl && (
-                <div
-                  className="avatar-mouth"
-                  style={{
-                    transform: `translate(-50%, -50%) scaleX(${0.8 + speech.mouthWidth * 0.4}) scaleY(${0.3 + speech.mouthOpen * 0.7})`,
-                    opacity: speech.isSpeaking ? 1 : 0,
-                  }}
-                ></div>
-              )}
+              {/* Mouth overlay disabled - looks unnatural with static image */}
 
               <div
                 className="speech-glow"
@@ -1404,8 +1808,32 @@ const LunaAvatarInterface = () => {
             <span className="status-label">{statusLabel}</span>
           </div>
 
+          {/* Voice Waveform Visualization */}
+          {recognition.isListening && (
+            <div className="voice-waveform-container">
+              <MicrophoneWaveform 
+                waveformData={recognition.waveformData} 
+                isListening={recognition.isListening}
+                audioLevel={recognition.audioLevel}
+              />
+            </div>
+          )}
+
+          {/* Live Transcript Display (Debug) */}
+          {(recognition.transcript || recognition.interimTranscript || debugTranscript) && (
+            <div className="live-transcript-debug">
+              <span className="transcript-label">🎤 Heard:</span>
+              <span className="transcript-text">
+                {debugTranscript || recognition.transcript || recognition.interimTranscript}
+              </span>
+              {!debugTranscript && recognition.interimTranscript && (
+                <span className="transcript-interim">...</span>
+              )}
+            </div>
+          )}
+
           {/* Replay Button - shows when there's a previous answer and not currently playing */}
-          {lastVideoUrl && !currentVideoUrl && !isGeneratingVideo && !isProcessing && (
+          {canReplay && (
             <button 
               className="replay-button"
               onClick={handleReplay}
@@ -1456,6 +1884,25 @@ const LunaAvatarInterface = () => {
               ))}
             </div>
           )}
+
+          {/* Text input form */}
+          <form className="text-form avatar-text-form" onSubmit={handleSubmit}>
+            <input
+              type="text"
+              className="text-input"
+              placeholder="Or type your message here..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              disabled={isProcessing}
+            />
+            <button 
+              type="submit" 
+              className="send-btn"
+              disabled={isProcessing || !inputText.trim()}
+            >
+              Send →
+            </button>
+          </form>
         </section>
       </main>
     </div>
