@@ -178,7 +178,7 @@ export const chatService = {
         text,
         audio_url: audioUrl,
         voice_id: voiceId,
-        quality: quality, // Use 'fast' for 30-40s generation instead of 'high'
+        quality: quality, // 'fast' mode: optimized for speed (10-20s with SadTalker)
       });
       return response.data;
     } catch (error) {
