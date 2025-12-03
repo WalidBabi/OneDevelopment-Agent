@@ -7,7 +7,7 @@
 - ❌ `51.20.117.103` (old)
 
 **New Elastic IP**: 
-- ✅ `13.62.188.127` (permanent)
+- ✅ `<YOUR_SERVER_IP>` (permanent)
 
 ---
 
@@ -31,25 +31,25 @@
 
 ### For Users (Luna Chat):
 ```
-http://13.62.188.127:3000/
+http://<YOUR_SERVER_IP>:3000/
 ```
 **Beautiful chat interface with sidebar and conversation history**
 
 ### For Admins (PDF Upload):
 ```
-http://13.62.188.127:8000/pdf-admin/
+http://<YOUR_SERVER_IP>:8000/pdf-admin/
 ```
 **Custom admin panel for uploading PDFs**
 
 ### Django Admin:
 ```
-http://13.62.188.127:8000/admin/
+http://<YOUR_SERVER_IP>:8000/admin/
 ```
 **Traditional Django admin interface**
 
 ### API Endpoints:
 ```
-http://13.62.188.127:8000/api/
+http://<YOUR_SERVER_IP>:8000/api/
 ```
 
 ---
@@ -61,7 +61,7 @@ http://13.62.188.127:8000/api/
 ✅ React Frontend:  Running on 0.0.0.0:3000
 ✅ Health Check:    {"status":"healthy"}
 ✅ CORS Configured: Accepting requests from new IP
-✅ Elastic IP:      13.62.188.127 (permanent)
+✅ Elastic IP:      <YOUR_SERVER_IP> (permanent)
 ```
 
 ---
@@ -70,7 +70,7 @@ http://13.62.188.127:8000/api/
 
 ### 1. Test Luna Chat:
 ```
-Open: http://13.62.188.127:3000/
+Open: http://<YOUR_SERVER_IP>:3000/
 
 You should see:
 - Beautiful purple sidebar
@@ -81,7 +81,7 @@ You should see:
 
 ### 2. Test Admin Panel:
 ```
-Open: http://13.62.188.127:8000/pdf-admin/
+Open: http://<YOUR_SERVER_IP>:8000/pdf-admin/
 
 You should see:
 - Login redirect (if not logged in)
@@ -92,7 +92,7 @@ You should see:
 
 ### 3. Test API:
 ```bash
-curl http://13.62.188.127:8000/api/health/
+curl http://<YOUR_SERVER_IP>:8000/api/health/
 # Should return: {"status":"healthy",...}
 ```
 
@@ -118,24 +118,24 @@ curl http://13.62.188.127:8000/api/health/
 
 ### Backend `.env`:
 ```env
-ALLOWED_HOSTS=localhost,127.0.0.1,13.62.188.127,13.62.188.127
+ALLOWED_HOSTS=localhost,127.0.0.1,<YOUR_SERVER_IP>,<YOUR_SERVER_IP>
 ```
 
 ### Backend `settings.py`:
 ```python
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '13.62.188.127']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '<YOUR_SERVER_IP>']
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://13.62.188.127:3000",
-    "http://13.62.188.127:8000",
+    "http://<YOUR_SERVER_IP>:3000",
+    "http://<YOUR_SERVER_IP>:8000",
 ]
 ```
 
 ### Frontend `.env`:
 ```env
-REACT_APP_API_URL=http://13.62.188.127:8000/api
+REACT_APP_API_URL=http://<YOUR_SERVER_IP>:8000/api
 ```
 
 ---
@@ -188,10 +188,10 @@ nohup npm start > /tmp/react.log 2>&1 &
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| **Luna Chat** | http://13.62.188.127:3000/ | User interface |
-| **PDF Admin** | http://13.62.188.127:8000/pdf-admin/ | Upload PDFs |
-| **Django Admin** | http://13.62.188.127:8000/admin/ | Full admin |
-| **API Health** | http://13.62.188.127:8000/api/health/ | Status check |
+| **Luna Chat** | http://<YOUR_SERVER_IP>:3000/ | User interface |
+| **PDF Admin** | http://<YOUR_SERVER_IP>:8000/pdf-admin/ | Upload PDFs |
+| **Django Admin** | http://<YOUR_SERVER_IP>:8000/admin/ | Full admin |
+| **API Health** | http://<YOUR_SERVER_IP>:8000/api/health/ | Status check |
 
 ---
 
@@ -211,7 +211,7 @@ nohup npm start > /tmp/react.log 2>&1 &
 
 Your application is now running on a permanent Elastic IP address:
 
-**`13.62.188.127`**
+**`<YOUR_SERVER_IP>`**
 
 This IP will stay the same even if you:
 - Stop/start the EC2 instance
@@ -220,7 +220,7 @@ This IP will stay the same even if you:
 
 **Just share this URL with your users:**
 ```
-http://13.62.188.127:3000/
+http://<YOUR_SERVER_IP>:3000/
 ```
 
 ---
@@ -253,7 +253,7 @@ curl http://localhost:8000/api/health/
 ---
 
 **Status**: ✅ All Systems Operational  
-**Elastic IP**: 13.62.188.127  
+**Elastic IP**: <YOUR_SERVER_IP>  
 **Last Updated**: November 20, 2025  
 
 🎉 **Your Luna AI Assistant is ready with a permanent address!**

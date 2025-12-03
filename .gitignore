@@ -49,6 +49,10 @@ build/
 
 # Environment variables
 .env
+.env.*
+!env.example
+*.env
+.envrc
 
 # IDE
 .vscode/
@@ -64,4 +68,31 @@ chroma_db/
 # OS
 .DS_Store
 Thumbs.db
+
+# Security - Never commit these!
+# ngrok configuration and auth tokens
+ngrok.yml
+.ngrok2/
+*.ngrok
+
+# Secrets and credentials
+secrets.json
+credentials.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Backup files that might contain secrets
+*.backup
+*.bak
+*.old
+*_backup.*
+
+# Generated audio/video (can be large and may contain sensitive content)
+avatar_service/generated_audio/*.mp3
+avatar_service/generated_videos/*.mp4
+!avatar_service/generated_audio/.gitkeep
+!avatar_service/generated_videos/.gitkeep
 

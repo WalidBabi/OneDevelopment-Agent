@@ -5,7 +5,7 @@
 ### 1. Download LivePortrait
 
 ```powershell
-cd C:\Users\Walid\Downloads
+cd %USERPROFILE%\Downloads
 git clone https://github.com/KwaiVGI/LivePortrait.git
 cd LivePortrait
 ```
@@ -14,11 +14,11 @@ cd LivePortrait
 
 ```powershell
 # Activate your avatar service venv
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
 .\venv\Scripts\activate
 
 # Install LivePortrait requirements
-pip install -r C:\Users\Walid\Downloads\LivePortrait\requirements.txt
+pip install -r %USERPROFILE%\Downloads\LivePortrait\requirements.txt
 
 # Install additional packages
 pip install gTTS opencv-python
@@ -29,7 +29,7 @@ pip install gTTS opencv-python
 LivePortrait needs pretrained weights. Run this:
 
 ```powershell
-cd C:\Users\Walid\Downloads\LivePortrait
+cd %USERPROFILE%\Downloads\LivePortrait
 
 # Download weights (this will take a few minutes)
 python scripts/download_models.py
@@ -38,7 +38,7 @@ python scripts/download_models.py
 If that doesn't work, manually download from:
 https://huggingface.co/KwaiVGI/LivePortrait/tree/main
 
-Put the files in: `C:\Users\Walid\Downloads\LivePortrait\pretrained_weights\`
+Put the files in: `%USERPROFILE%\Downloads\LivePortrait\pretrained_weights\`
 
 ### 4. Get a Photorealistic Luna Image
 
@@ -47,7 +47,7 @@ You need a high-quality female portrait photo:
 **Option A: Generate with AI**
 - Use Midjourney, DALL-E, or Stable Diffusion
 - Prompt: "professional headshot photo of a beautiful female AI assistant, front facing, neutral expression, soft lighting, 4k, photorealistic"
-- Save as: `C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service\luna_base.png`
+- Save as: `%USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service\luna_base.png`
 
 **Option B: Use a stock photo**
 - Get from Unsplash/Pexels (free)
@@ -63,7 +63,7 @@ You need a high-quality female portrait photo:
 ### 5. Test LivePortrait
 
 ```powershell
-cd C:\Users\Walid\Downloads\LivePortrait
+cd %USERPROFILE%\Downloads\LivePortrait
 
 # Test with example
 python inference.py --source assets/examples/source/s6.jpg --driving assets/examples/driving/d0.mp4
@@ -76,7 +76,7 @@ This should generate a test video in `animations/`.
 Copy the new server file:
 
 ```powershell
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
 
 # Backup old file
 copy avatar_server.py avatar_server_backup.py
@@ -122,7 +122,7 @@ pip install <missing-module>
 If LivePortrait doesn't work, try SadTalker:
 
 ```powershell
-cd C:\Users\Walid\Downloads
+cd %USERPROFILE%\Downloads
 git clone https://github.com/OpenTalker/SadTalker.git
 cd SadTalker
 pip install -r requirements.txt
@@ -137,4 +137,8 @@ Then I'll give you the integration code for SadTalker.
 3. Test LivePortrait works
 4. Update avatar service
 5. Test with Luna!
+
+
+
+
 

@@ -13,11 +13,11 @@ The following changes are now in the repository:
 
 ### Step 1: SSH into AWS
 ```bash
-ssh ec2-user@13.62.188.127
+ssh ec2-user@<YOUR_SERVER_IP>
 ```
 Or if you use a key:
 ```bash
-ssh -i your-key.pem ec2-user@13.62.188.127
+ssh -i your-key.pem ec2-user@<YOUR_SERVER_IP>
 ```
 
 ### Step 2: Navigate to Project
@@ -86,7 +86,7 @@ tail -f backend/backend.log
 
 ## 🧪 Test the Deployment
 
-1. Open browser: http://13.62.188.127:3000/
+1. Open browser: http://<YOUR_SERVER_IP>:3000/
 2. Ask Luna: "Hello, tell me about yourself"
 3. Watch for:
    - ✅ No old audio/mouth animation
@@ -121,7 +121,7 @@ Make sure your laptop avatar service is still running with ngrok!
 
 ```
 ┌─────────────────────────────────────────────┐
-│           AWS (13.62.188.127)               │
+│           AWS (<YOUR_SERVER_IP>)               │
 │                                             │
 │  ┌─────────────┐      ┌─────────────┐     │
 │  │  Frontend   │      │   Backend   │     │

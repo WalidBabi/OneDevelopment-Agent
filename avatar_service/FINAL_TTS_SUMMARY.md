@@ -145,7 +145,7 @@ python test_advanced_tts.py
 - Setup time: 30 minutes
 
 ```bash
-cd C:\Users\Walid\Downloads
+cd %USERPROFILE%\Downloads
 git clone https://github.com/fishaudio/fish-speech.git
 cd fish-speech
 pip install -e .
@@ -164,7 +164,7 @@ pip install -e .
 ### Restart Server
 
 ```bash
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
 .\venv\Scripts\activate
 $env:Path += ";C:\path\to\ffmpeg\bin"
 python avatar_server_improved.py

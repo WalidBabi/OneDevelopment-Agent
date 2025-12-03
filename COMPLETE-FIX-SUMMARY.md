@@ -191,7 +191,7 @@ npm start
 
 ### Step 2: Test the Fix
 
-1. **Open chat** at http://13.62.188.127:3000
+1. **Open chat** at http://<YOUR_SERVER_IP>:3000
 2. **Send a message** to Luna
 3. **Watch for:**
    - ✅ Action labels appear during processing
@@ -296,4 +296,8 @@ phase === 'done' || currentAction?.type === 'done' || !isActive
 **Status:** ✅ COMPLETE - Ready to test!
 
 **Next Action:** Hard refresh your browser and test!
+
+
+
+
 

@@ -18,5 +18,9 @@ urlpatterns = [
     # Avatar service endpoints
     path('avatar/generate/', views.generate_avatar, name='generate-avatar'),
     path('avatar/health/', views.avatar_health, name='avatar-health'),
+    path('avatar/videos/<str:video_id>', views.avatar_video_proxy, name='avatar-video-proxy'),
+    # TTS (Text-to-Speech) endpoints - OpenAI realistic voices
+    path('tts/generate/', views.generate_tts, name='generate-tts'),
+    path('tts/voices/', views.tts_voices, name='tts-voices'),
 ]
 

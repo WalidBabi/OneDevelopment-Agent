@@ -56,6 +56,13 @@ const Sidebar = ({
 
   return (
     <>
+      {/* Mobile overlay backdrop */}
+      <div 
+        className={`sidebar-overlay ${!isCollapsed ? 'visible' : ''}`}
+        onClick={onToggle}
+        aria-hidden="true"
+      />
+      
       <div className={`sidebar-container ${isCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={onNewConversation}>

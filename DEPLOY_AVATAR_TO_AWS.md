@@ -3,7 +3,7 @@
 ## Current Setup ✅
 
 - **Avatar Service**: Running locally on port 8000
-- **ngrok Tunnel**: `https://5d812f2e82fa.ngrok-free.app`
+- **ngrok Tunnel**: `https://YOUR_UNIQUE_ID.ngrok-free.app`
 - **GPU**: NVIDIA RTX 4050 (local)
 - **Status**: Ready to connect to AWS!
 
@@ -14,7 +14,7 @@
 Your laptop already has the latest code. Make sure it's pushed:
 
 ```bash
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main
 git add .
 git commit -m "Add video player and optimize avatar generation"
 git push origin main
@@ -48,10 +48,10 @@ git pull origin main
 
 ```bash
 # Set environment variable
-export AVATAR_SERVICE_URL=https://5d812f2e82fa.ngrok-free.app
+export AVATAR_SERVICE_URL=https://YOUR_UNIQUE_ID.ngrok-free.app
 
 # Add to .env file for persistence
-echo "AVATAR_SERVICE_URL=https://5d812f2e82fa.ngrok-free.app" >> backend/.env
+echo "AVATAR_SERVICE_URL=https://YOUR_UNIQUE_ID.ngrok-free.app" >> backend/.env
 ```
 
 ### Install Frontend Dependencies (if needed):
@@ -117,7 +117,7 @@ tail -f frontend/frontend.log
 
 ```bash
 # Test backend can reach your laptop
-curl https://5d812f2e82fa.ngrok-free.app/health
+curl https://YOUR_UNIQUE_ID.ngrok-free.app/health
 
 # Should return:
 # {"status": "healthy", "device": "cuda", "gpu_info": {...}}
@@ -151,7 +151,7 @@ curl https://5d812f2e82fa.ngrok-free.app/health
 └──────────────────────────────────────┼──────────────────┘
                                        │
                                        │ ngrok Tunnel
-                                       │ (5d812f2e82fa)
+                                       │ (YOUR_NGROK_ID)
                                        │
 ┌──────────────────────────────────────▼──────────────────┐
 │              Your Laptop (Windows)                       │
@@ -224,7 +224,7 @@ Get-Process python | Where-Object {$_.Path -like "*avatar_service*"}
 
 Restart if needed:
 ```powershell
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
 python avatar_server_final.py
 ```
 
@@ -237,7 +237,7 @@ curl http://localhost:4040/api/tunnels
 
 Restart ngrok:
 ```powershell
-cd C:\Users\Walid\Downloads\ngrok-v3-stable-windows-amd64
+cd %USERPROFILE%\Downloads\ngrok-v3-stable-windows-amd64
 .\ngrok http 8000
 ```
 
@@ -245,7 +245,7 @@ cd C:\Users\Walid\Downloads\ngrok-v3-stable-windows-amd64
 
 Test from AWS:
 ```bash
-curl https://5d812f2e82fa.ngrok-free.app/health
+curl https://YOUR_UNIQUE_ID.ngrok-free.app/health
 ```
 
 If fails, check:
@@ -303,7 +303,7 @@ curl http://localhost:4040/api/tunnels
 
 ```bash
 # Set avatar URL
-export AVATAR_SERVICE_URL=https://5d812f2e82fa.ngrok-free.app
+export AVATAR_SERVICE_URL=https://YOUR_UNIQUE_ID.ngrok-free.app
 
 # Restart backend
 pkill -f "manage.py runserver"

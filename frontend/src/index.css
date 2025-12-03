@@ -28,3 +28,15 @@ code {
   padding: 20px;
 }
 
+/* Responsive: Full-screen on mobile */
+@media (max-width: 768px) {
+  #root {
+    padding: 0;
+    align-items: stretch;
+  }
+  
+  body {
+    background: #f8f9fa;
+  }
+}
+

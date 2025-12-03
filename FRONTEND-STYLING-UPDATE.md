@@ -208,3 +208,7 @@ The action display and thinking tokens now have a clean, minimal "old style":
 
 **The thinking process is now displayed with a simple, elegant style that doesn't get in the way!**
 
+
+
+
+

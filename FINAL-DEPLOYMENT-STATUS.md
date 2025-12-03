@@ -215,7 +215,7 @@ curl -X POST http://localhost:8000/api/chat/ \
 **Expected:** Luna response with reasoning metadata
 
 ### 3. Frontend Test
-Open `http://13.62.188.127:3000` in browser
+Open `http://<YOUR_SERVER_IP>:3000` in browser
 
 **Expected:** No more `ERR_CONNECTION_REFUSED` errors!
 
@@ -335,5 +335,9 @@ Full details available in:
 **Frontend:** ✅ CAN CONNECT  
 
 **🎉 DEPLOYMENT SUCCESSFUL! 🎉**
+
+
+
+
 
 

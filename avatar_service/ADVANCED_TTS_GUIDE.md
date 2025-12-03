@@ -330,7 +330,7 @@ write_wav("output.wav", SAMPLE_RATE, audio_array)
 
 ```bash
 # 1. Clone repository
-cd C:\Users\Walid\Downloads
+cd %USERPROFILE%\Downloads
 git clone https://github.com/fishaudio/fish-speech.git
 cd fish-speech
 
@@ -407,7 +407,7 @@ async def _generate_fish_audio(self, text: str, output_path: str, voice: str):
 **Easiest to set up immediately:**
 
 ```bash
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
 .\venv\Scripts\activate
 
 # Install Parler-TTS

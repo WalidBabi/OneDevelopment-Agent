@@ -58,7 +58,9 @@ The improved avatar server is currently running with:
 - **Fallback:** gTTS (Google TTS)
 - **GPU:** Enabled (CUDA)
 - **Port:** 8000
-- **Tunnel:** ngrok → https://5d812f2e82fa.ngrok-free.app
+- **Tunnel:** ngrok → Run `ngrok http 8000` to get your URL
+
+**⚠️ SECURITY:** Never commit ngrok URLs to version control! Set via `AVATAR_SERVICE_URL` env var.
 
 ### Test It
 

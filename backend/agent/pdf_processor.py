@@ -81,7 +81,7 @@ class PDFProcessor:
         Args:
             pdf_document: PDFDocument model instance
         """
-        from agent.langgraph_agent import OneDevelopmentAgent
+        from agent import get_luna_agent
         
         # Extract text from PDF
         pdf_path = pdf_document.file.path
@@ -95,8 +95,8 @@ class PDFProcessor:
         # Chunk the text for better indexing
         chunks = self.chunk_text(extracted_text)
         
-        # Get agent instance and add to ChromaDB
-        agent = OneDevelopmentAgent()
+        # Get Luna agent instance and add to ChromaDB
+        agent = get_luna_agent()
         
         for i, chunk in enumerate(chunks):
             metadata = {

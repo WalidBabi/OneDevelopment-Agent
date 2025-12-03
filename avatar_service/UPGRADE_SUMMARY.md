@@ -87,7 +87,7 @@ if (response.audio_url) {
 SadTalker creates talking head videos from audio:
 
 ```bash
-cd C:\Users\Walid\Downloads
+cd %USERPROFILE%\Downloads
 git clone https://github.com/OpenTalker/SadTalker.git
 cd SadTalker
 
@@ -173,7 +173,7 @@ python test_voices.py
 
 2. Start the improved server:
 ```bash
-cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+cd %USERPROFILE%\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
 .\venv\Scripts\activate
 python avatar_server_improved.py
 ```
