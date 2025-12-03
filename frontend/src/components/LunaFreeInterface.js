@@ -1481,6 +1481,7 @@ const LunaAvatarInterface = () => {
   const progressIntervalRef = useRef(null);
   const autoRestartTimeoutRef = useRef(null);
   const sendMessageRef = useRef(null);
+  const abortControllerRef = useRef(null); // For cancelling backend requests
 
   const speech = useEnhancedSpeech();
   
@@ -1499,6 +1500,13 @@ const LunaAvatarInterface = () => {
   // Interrupt callback - stop Luna when user starts speaking
   const handleInterrupt = useCallback(() => {
     console.log('🛑 User speaking - interrupting Luna...');
+    
+    // Abort any ongoing backend requests (chat, avatar generation, etc.)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      console.log('🚫 Aborted backend request');
+    }
     
     // Stop TTS audio if playing
     if (speech.isSpeaking) {
@@ -1647,9 +1655,19 @@ const LunaAvatarInterface = () => {
       const text = messageText.trim();
       setIsProcessing(true);
 
+      // Create AbortController for this request
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
-        const response = await chatService.sendMessage(text, sessionId);
+        const response = await chatService.sendMessage(text, sessionId, abortController.signal);
         const responseText = response.response;
+
+        // Check if request was aborted (user interrupted)
+        if (abortController.signal.aborted) {
+          console.log('Request was aborted by user interrupt');
+          return;
+        }
 
         // Try to generate photorealistic avatar video if service is available
         if (avatarServiceAvailable) {
@@ -1673,7 +1691,13 @@ const LunaAvatarInterface = () => {
               });
             }, 600); // Update every 600ms (60 seconds total to reach 95%)
             
-            const avatarResult = await chatService.generateAvatar(responseText, null, 'default', 'fast');
+            const avatarResult = await chatService.generateAvatar(responseText, null, 'default', 'fast', abortController.signal);
+            
+            // Check if request was aborted during video generation
+            if (abortController.signal.aborted) {
+              console.log('Avatar generation was aborted by user interrupt');
+              return;
+            }
             
             // Clear progress interval
             if (progressIntervalRef.current) {
@@ -1711,6 +1735,23 @@ const LunaAvatarInterface = () => {
               // DO NOT CALL speech.speak() - video has audio!
             }
           } catch (avatarError) {
+            // Check if it was aborted by user interrupt
+            if (avatarError.name === 'AbortError' || avatarError.name === 'CanceledError') {
+              console.log('Avatar generation cancelled by user');
+              if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+              }
+              setIsGeneratingVideo(false);
+              setVideoProgress(0);
+              // Don't speak - user interrupted, just restart listening
+              setTimeout(() => {
+                if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
+                  recognition.startListening();
+                }
+              }, 500);
+              return;
+            }
+            
             console.error('Avatar generation error:', avatarError);
             // Clear progress and fallback to TTS only if error
             if (progressIntervalRef.current) {
@@ -1743,6 +1784,18 @@ const LunaAvatarInterface = () => {
           }, LUNA_VOICE);
         }
       } catch (err) {
+        // Check if request was aborted by user interrupt
+        if (err.name === 'AbortError' || err.name === 'CanceledError') {
+          console.log('Request cancelled by user interrupt');
+          // Just restart listening, don't speak
+          setTimeout(() => {
+            if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
+              recognition.startListening();
+            }
+          }, 500);
+          return;
+        }
+        
         console.error('Avatar interface error:', err);
         speech.speak("I'm having trouble connecting right now. Please try again in a moment.", () => {
           // After TTS ends, restart listening
@@ -1755,6 +1808,7 @@ const LunaAvatarInterface = () => {
         }, LUNA_VOICE);
       } finally {
         setIsProcessing(false);
+        abortControllerRef.current = null; // Clear the abort controller
       }
     },
     [isProcessing, sessionId, speech, avatarServiceAvailable, LUNA_VOICE]

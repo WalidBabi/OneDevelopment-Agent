@@ -10,15 +10,22 @@ const api = axios.create({
 });
 
 export const chatService = {
-  sendMessage: async (message, sessionId = null) => {
+  sendMessage: async (message, sessionId = null, signal = null) => {
     try {
       const response = await api.post('/chat/', {
         message,
         session_id: sessionId,
+      }, {
+        signal, // Pass AbortSignal to axios
       });
       return response.data;
     } catch (error) {
-      console.error('Error sending message:', error);
+      // Don't log as error if it was intentionally cancelled
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+        console.log('Request cancelled by user');
+      } else {
+        console.error('Error sending message:', error);
+      }
       throw error;
     }
   },
@@ -172,16 +179,25 @@ export const chatService = {
   },
 
   // Avatar service
-  generateAvatar: async (text, audioUrl = null, voiceId = 'default', quality = 'fast') => {
+  generateAvatar: async (text, audioUrl = null, voiceId = 'default', quality = 'fast', signal = null) => {
     try {
       const response = await api.post('/avatar/generate/', {
         text,
         audio_url: audioUrl,
         voice_id: voiceId,
         quality: quality, // 'fast' mode: optimized for speed (10-20s with SadTalker)
+      }, {
+        signal, // Pass AbortSignal to axios
+        timeout: 180000, // 3 minute timeout for video generation
       });
       return response.data;
     } catch (error) {
+      // Don't log as error if it was intentionally cancelled
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+        console.log('Avatar generation cancelled by user');
+        throw error;
+      }
+      
       console.error('Error generating avatar:', error);
       // Return fallback info if avatar service is unavailable
       if (error.response?.data?.fallback) {
