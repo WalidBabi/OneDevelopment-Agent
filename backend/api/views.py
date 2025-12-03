@@ -595,6 +595,20 @@ def generate_avatar(request):
         if response.status_code == 200:
             data = response.json()
             logger.info(f"Avatar generated successfully: {data.get('video_id')}")
+            
+            # Rewrite video URL to go through our proxy instead of direct to local service
+            # This allows the AWS server to stream videos from the local laptop
+            if 'video_url' in data and data.get('video_id'):
+                # Build the proxy URL using the request's host
+                scheme = 'https' if request.is_secure() else 'http'
+                host = request.get_host()
+                video_id = data['video_id']
+                # Video ID from local service might not include .mp4, add if missing
+                if not video_id.endswith('.mp4'):
+                    video_id = f"{video_id}.mp4"
+                data['video_url'] = f"{scheme}://{host}/api/avatar/videos/{video_id}"
+                logger.info(f"Rewritten video URL to: {data['video_url']}")
+            
             return Response(data, status=status.HTTP_200_OK)
         else:
             logger.error(f"Avatar service error: {response.status_code} - {response.text}")
@@ -662,6 +676,60 @@ def avatar_health(request):
             'status': 'unavailable',
             'message': str(e)
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+from django.http import StreamingHttpResponse, HttpResponse
+
+@api_view(['GET'])
+def avatar_video_proxy(request, video_id):
+    """
+    Proxy video streaming from the local GPU avatar service to the browser.
+    
+    This allows videos generated on your local laptop to be viewed on the AWS server.
+    The video is streamed in chunks to avoid loading the entire video into memory.
+    
+    GET /api/avatar/videos/<video_id>.mp4
+    """
+    avatar_service_url = os.getenv('AVATAR_SERVICE_URL')
+    
+    if not avatar_service_url:
+        return HttpResponse('Avatar service not configured', status=503)
+    
+    try:
+        # Stream video from local avatar service
+        video_url = f"{avatar_service_url}/videos/{video_id}"
+        logger.info(f"Proxying video from: {video_url}")
+        
+        response = requests.get(video_url, stream=True, timeout=30)
+        
+        if response.status_code == 200:
+            def generate():
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+            
+            streaming_response = StreamingHttpResponse(
+                generate(),
+                content_type='video/mp4'
+            )
+            streaming_response['Content-Disposition'] = f'inline; filename="{video_id}"'
+            streaming_response['Accept-Ranges'] = 'bytes'
+            
+            # Forward content length if available
+            if 'Content-Length' in response.headers:
+                streaming_response['Content-Length'] = response.headers['Content-Length']
+            
+            return streaming_response
+        else:
+            logger.error(f"Video not found: {video_id}")
+            return HttpResponse('Video not found', status=404)
+            
+    except requests.exceptions.ConnectionError:
+        logger.error("Cannot connect to avatar service for video")
+        return HttpResponse('Avatar service unavailable', status=503)
+    except Exception as e:
+        logger.error(f"Error proxying video: {str(e)}")
+        return HttpResponse(f'Error: {str(e)}', status=500)
 
 
 # ============================================================================
