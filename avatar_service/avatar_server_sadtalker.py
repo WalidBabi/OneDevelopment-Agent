@@ -123,7 +123,7 @@ async def health_check():
 
 @app.post("/generate", response_model=AvatarResponse)
 async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTasks):
-    """Generate avatar video using SadTalker"""
+    """Generate avatar video using SadTalker with OpenAI TTS support"""
     
     if not AVATAR_IMAGE.exists():
         raise HTTPException(status_code=500, detail="luna_base.png not found")
@@ -132,22 +132,55 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
         raise HTTPException(status_code=503, detail="SadTalker not initialized")
     
     video_id = str(uuid.uuid4())
+    audio_path = AUDIO_DIR / f"{video_id}.mp3"
     
     try:
         logger.info(f"📨 New request: {request.text[:50]}...")
         logger.info(f"   Quality: {request.quality}")
         logger.info(f"   Voice: {request.voice_id}")
+        logger.info(f"   Audio URL: {request.audio_url}")
         
-        # Generate video using SadTalker
-        result = sadtalker_generator.generate(
-            text=request.text,
-            source_image=str(AVATAR_IMAGE),
-            video_id=video_id,
-            quality=request.quality,
-            output_dir=str(OUTPUT_DIR),
-            audio_dir=str(AUDIO_DIR),
-            temp_dir=str(TEMP_DIR)
-        )
+        # Step 1: Get audio (download OpenAI TTS if provided, otherwise generate)
+        if request.audio_url:
+            # Download high-quality OpenAI TTS audio from backend
+            logger.info(f"📥 Downloading OpenAI TTS audio from: {request.audio_url}")
+            import requests
+            try:
+                response = requests.get(request.audio_url, timeout=30)
+                response.raise_for_status()
+                audio_path.write_bytes(response.content)
+                logger.info(f"✅ Downloaded OpenAI TTS audio: {audio_path}")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to download audio_url, falling back to local TTS: {e}")
+                # Clear audio_url to trigger local TTS generation
+                request.audio_url = None
+        
+        # Step 2: Generate video using SadTalker
+        if request.audio_url and audio_path.exists():
+            # Use downloaded OpenAI audio
+            logger.info(f"🎬 Generating video with OpenAI TTS audio...")
+            result = sadtalker_generator.generate(
+                audio_path=str(audio_path),  # Use pre-generated audio
+                text=request.text,  # Keep text as reference
+                source_image=str(AVATAR_IMAGE),
+                video_id=video_id,
+                quality=request.quality,
+                output_dir=str(OUTPUT_DIR),
+                audio_dir=str(AUDIO_DIR),
+                temp_dir=str(TEMP_DIR)
+            )
+        else:
+            # Generate audio with local TTS (fallback)
+            logger.info(f"🎤 Generating audio with local TTS (no OpenAI audio provided)")
+            result = sadtalker_generator.generate(
+                text=request.text,
+                source_image=str(AVATAR_IMAGE),
+                video_id=video_id,
+                quality=request.quality,
+                output_dir=str(OUTPUT_DIR),
+                audio_dir=str(AUDIO_DIR),
+                temp_dir=str(TEMP_DIR)
+            )
         
         logger.info(f"✓ Video ready: {video_id}.mp4")
         
@@ -167,6 +200,30 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/last-video")
+async def get_last_video():
+    """Get the last generated video"""
+    try:
+        # Find the most recently modified video file
+        mp4_files = list(OUTPUT_DIR.glob("*.mp4"))
+        if not mp4_files:
+            return {"exists": False, "error": "No videos found"}
+        
+        # Sort by modification time, get the latest
+        latest_video = max(mp4_files, key=lambda p: p.stat().st_mtime)
+        video_id = latest_video.stem  # filename without extension
+        
+        return {
+            "exists": True,
+            "video_id": video_id,
+            "video_url": f"http://localhost:8000/videos/{video_id}.mp4",
+            "filename": latest_video.name
+        }
+    except Exception as e:
+        logger.error(f"Error getting last video: {e}")
+        return {"exists": False, "error": str(e)}
 
 
 @app.get("/videos/{filename}")

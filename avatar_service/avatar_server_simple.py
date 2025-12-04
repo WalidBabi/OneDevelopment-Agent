@@ -177,7 +177,7 @@ async def health_check():
 
 @app.post("/generate", response_model=AvatarResponse)
 async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTasks):
-    """Generate avatar video"""
+    """Generate avatar video with OpenAI TTS support"""
     
     if not AVATAR_IMAGE.exists():
         raise HTTPException(status_code=500, detail="luna_base.png not found")
@@ -191,11 +191,39 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
     try:
         logger.info(f"📨 New request: {request.text[:50]}...")
         logger.info(f"   Quality: {request.quality}")
+        logger.info(f"   Audio URL: {request.audio_url}")
         
-        # Step 1: Generate audio
-        logger.info("🎤 Generating audio...")
-        duration = await generate_audio_with_tts(request.text, audio_path)
-        logger.info(f"✓ Audio generated: {duration:.1f}s")
+        # Step 1: Get audio (download OpenAI TTS if provided, otherwise generate)
+        if request.audio_url:
+            # Download high-quality OpenAI TTS audio from backend
+            logger.info(f"📥 Downloading OpenAI TTS audio from: {request.audio_url}")
+            import requests
+            try:
+                response = requests.get(request.audio_url, timeout=30)
+                response.raise_for_status()
+                audio_path.write_bytes(response.content)
+                logger.info(f"✅ Downloaded OpenAI TTS audio: {audio_path}")
+                
+                # Get duration from downloaded audio
+                try:
+                    from mutagen.mp3 import MP3
+                    audio = MP3(str(audio_path))
+                    duration = audio.info.length
+                except:
+                    # Estimate from text
+                    words = len(request.text.split())
+                    duration = (words / 150) * 60
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to download audio_url, falling back to local TTS: {e}")
+                # Fall back to local TTS generation
+                logger.info("🎤 Generating audio with local TTS...")
+                duration = await generate_audio_with_tts(request.text, audio_path)
+        else:
+            # Generate audio with local TTS
+            logger.info("🎤 Generating audio with local TTS...")
+            duration = await generate_audio_with_tts(request.text, audio_path)
+        
+        logger.info(f"✓ Audio ready: {duration:.1f}s")
         
         # Step 2: Generate video with SadTalker
         video_path = generate_video_with_sadtalker(
@@ -221,6 +249,30 @@ async def generate_avatar(request: AvatarRequest, background_tasks: BackgroundTa
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/last-video")
+async def get_last_video():
+    """Get the last generated video"""
+    try:
+        # Find the most recently modified video file
+        mp4_files = list(OUTPUT_DIR.glob("*.mp4"))
+        if not mp4_files:
+            return {"exists": False, "error": "No videos found"}
+        
+        # Sort by modification time, get the latest
+        latest_video = max(mp4_files, key=lambda p: p.stat().st_mtime)
+        video_id = latest_video.stem  # filename without extension
+        
+        return {
+            "exists": True,
+            "video_id": video_id,
+            "video_url": f"http://localhost:8000/videos/{video_id}.mp4",
+            "filename": latest_video.name
+        }
+    except Exception as e:
+        logger.error(f"Error getting last video: {e}")
+        return {"exists": False, "error": str(e)}
 
 
 @app.get("/videos/{filename}")
