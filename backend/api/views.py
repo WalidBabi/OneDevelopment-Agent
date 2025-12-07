@@ -1259,7 +1259,7 @@ def liveavatar_create_session_token(request):
     
     POST /api/liveavatar/session-token/
     {
-        "avatar_id": "26393b8e-e944-4367-98ef-e2bc75c4b792",  // Optional, defaults to Luna
+        "avatar_id": "073b60a9-89a8-45aa-8902-c358f64d2852",  // Optional, defaults to Luna
         "voice_id": "optional-voice-id",
         "context_id": "optional-context-id",
         "mode": "FULL"  // or "CUSTOM"
@@ -1596,22 +1596,49 @@ def liveavatar_send_audio_custom_mode(request, session_id):
         else:
             audio_bytes = audio_data
         
-        # Send audio to LiveAvatar Custom Mode
-        # According to LiveAvatar docs, in Custom Mode you send audio via LiveKit WebRTC
-        # But we can also use the API endpoint if available
-        # For now, we'll return the audio data and LiveKit connection info
-        # The frontend will handle the actual WebRTC streaming
-        
+        # Send audio to LiveAvatar Custom Mode via HTTP POST
         logger.info(f"Sending audio to LiveAvatar Custom Mode session {session_id} ({len(audio_bytes)} bytes)")
         
-        # Return audio data and session info for frontend to handle WebRTC
-        return Response({
-            'status': 'ready',
-            'session_id': session_id,
-            'audio_size': len(audio_bytes),
-            'format': audio_format,
-            'message': 'Audio ready. Use LiveKit WebRTC connection to send audio track.'
-        }, status=status.HTTP_200_OK)
+        # Determine content type based on format
+        content_type_map = {
+            'wav': 'audio/wav',
+            'mp3': 'audio/mpeg',
+            'ogg': 'audio/ogg',
+            'pcm': 'audio/pcm'
+        }
+        content_type = content_type_map.get(audio_format.lower(), 'audio/wav')
+        
+        # Send audio to LiveAvatar API
+        audio_headers = {
+            'Authorization': f'Bearer {session_token}',
+            'Content-Type': content_type
+        }
+        
+        audio_response = requests.post(
+            f'{liveavatar_base_url}/v1/sessions/{session_id}/audio',
+            headers=audio_headers,
+            data=audio_bytes,  # Send audio data directly as binary
+            timeout=60  # Longer timeout for large files
+        )
+        
+        logger.info(f"LiveAvatar audio upload response status: {audio_response.status_code}")
+        
+        if audio_response.ok:
+            logger.info(f"✅ Audio successfully sent to LiveAvatar session {session_id}")
+            return Response({
+                'status': 'sent',
+                'session_id': session_id,
+                'audio_size': len(audio_bytes),
+                'format': audio_format,
+                'message': 'Audio successfully sent to LiveAvatar'
+            }, status=status.HTTP_200_OK)
+        else:
+            logger.error(f"❌ LiveAvatar audio upload failed: {audio_response.status_code}")
+            logger.error(f"Error details: {audio_response.text}")
+            return Response({
+                'error': f'LiveAvatar API error: {audio_response.status_code}',
+                'details': audio_response.text[:500] if audio_response.text else 'No error details'
+            }, status=status.HTTP_502_BAD_GATEWAY)
         
     except Exception as e:
         logger.error(f"LiveAvatar send audio error: {str(e)}")
@@ -1658,7 +1685,7 @@ def liveavatar_chat_with_custom_mode(request):
     session_id = request.data.get('session_id') or str(uuid.uuid4())
     avatar_id = request.data.get(
         'avatar_id',
-        os.getenv('LIVEAVATAR_AVATAR_ID', '26393b8e-e944-4367-98ef-e2bc75c4b792')
+        os.getenv('LIVEAVATAR_AVATAR_ID', '073b60a9-89a8-45aa-8902-c358f64d2852')
     )
     voice = request.data.get('voice', 'nova')
     custom_livekit_url = request.data.get('livekit_room_url')
@@ -1711,6 +1738,46 @@ def liveavatar_chat_with_custom_mode(request):
         
         logger.info(f"LLM response received: {text_response[:50]}...")
         
+        # Summarize response for avatar (keep it concise for better user experience)
+        # Target: 100-150 words max for avatar responses
+        word_count = len(text_response.split())
+        if word_count > 120:
+            logger.info(f"Response is {word_count} words - summarizing to ~100-120 words for avatar")
+            try:
+                client = get_openai_client()
+                summarize_prompt = f"""You are Luna, an AI assistant for One Development. Summarize the following response for a spoken avatar interaction.
+
+Requirements:
+- Keep it natural, conversational, and friendly
+- Maximum 100-120 words
+- Preserve ALL key facts, numbers, dates, and important details
+- Maintain the same tone and helpfulness
+- Remove redundant phrases and verbose explanations
+- Keep it engaging and easy to understand when spoken aloud
+
+Original response:
+{text_response}
+
+Concise summary for spoken interaction:"""
+                
+                summary_response = client.chat.completions.create(
+                    model="gpt-4o-mini",  # Use cheaper model for summarization
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that creates concise, natural summaries for spoken interactions."},
+                        {"role": "user", "content": summarize_prompt}
+                    ],
+                    max_tokens=200,
+                    temperature=0.7
+                )
+                
+                text_response = summary_response.choices[0].message.content.strip()
+                logger.info(f"Summarized response: {len(text_response.split())} words")
+            except Exception as e:
+                logger.warning(f"Summarization failed, using original response: {str(e)}")
+                # If summarization fails, just truncate to first 600 characters
+                if len(text_response) > 600:
+                    text_response = text_response[:600] + "..."
+        
         # Step 2: Convert text to audio using OpenAI TTS
         logger.info(f"Converting text to audio with voice: {voice}")
         
@@ -1749,7 +1816,7 @@ def liveavatar_chat_with_custom_mode(request):
         
         # Create session token for Custom Mode using LiveAvatar API
         # Use avatar_id from request, fallback to env, then to default
-        actual_avatar_id = avatar_id or os.getenv('LIVEAVATAR_AVATAR_ID', '26393b8e-e944-4367-98ef-e2bc75c4b792')
+        actual_avatar_id = avatar_id or os.getenv('LIVEAVATAR_AVATAR_ID', '073b60a9-89a8-45aa-8902-c358f64d2852')
         logger.info(f"Using avatar_id: {actual_avatar_id} (from request: {avatar_id}, from env: {os.getenv('LIVEAVATAR_AVATAR_ID', 'not set')})")
         
         token_payload = {

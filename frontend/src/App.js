@@ -42,7 +42,16 @@ function App() {
           className="toggle-btn"
           onClick={handleToggle}
         >
-          {showLiveAvatar ? '💬' : '🎭'}
+          <img 
+            src="/Luna.png" 
+            alt="Luna" 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+              borderRadius: '50%'
+            }} 
+          />
         </button>
       </div>
 
@@ -50,7 +59,10 @@ function App() {
       {showLiveAvatar ? (
         <LunaLiveAvatarInterface key={`avatar-${interfaceKey}`} />
       ) : (
-        <ChatInterfaceWithSidebar key={`chat-${interfaceKey}`} />
+        <ChatInterfaceWithSidebar 
+          key={`chat-${interfaceKey}`} 
+          onAvatarToggle={handleToggle}
+        />
       )}
     </div>
   );

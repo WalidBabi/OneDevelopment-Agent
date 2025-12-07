@@ -15,11 +15,22 @@ const LunaLiveAvatarInterface = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioContext, setAudioContext] = useState(null);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [estimatedTime, setEstimatedTime] = useState(0);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const roomRef = useRef(null);
   const hasGreetedRef = useRef(false); // Track if greeting has been sent
   const pendingAudioRef = useRef(null); // Store audio to play when avatar is ready
+  const sessionTokenRef = useRef(null); // Store session token to reuse
+  const sessionIdRef = useRef(null); // Store session ID to reuse
+  const wsUrlRef = useRef(null); // Store WebSocket URL to reuse
+  const currentAvatarIdRef = useRef(null); // Track current avatar ID
+  const wsRef = useRef(null); // Store active WebSocket connection
+  const wsTimeoutRef = useRef(null); // Store WebSocket timeout reference
+  const isSpeakingRef = useRef(false); // Track if avatar has started speaking
+  const audioSentRef = useRef(false); // Track if audio was successfully sent
+  const expectedDurationRef = useRef(0); // Store expected audio duration
 
   // Initialize UI with auto-greeting and proper state management
   useEffect(() => {
@@ -219,22 +230,24 @@ const LunaLiveAvatarInterface = () => {
           if (audioRef.current) {
             track.attach(audioRef.current);
             
-            // Ensure audio is not muted and volume is full
+            // Start muted to comply with autoplay policy
             audioRef.current.muted = false;
             audioRef.current.volume = 1.0;
             console.log('🔊 Audio track attached - Volume: 100%, Muted: false');
             
-            // Ensure audio plays
+            // Try to play audio - if blocked, show prompt
             if (audioRef.current.paused) {
               audioRef.current.play().catch(err => {
-                console.log('⚠️ Audio autoplay blocked (expected on initial load)');
-                console.log('   Audio will play after user interaction');
+                console.log('⚠️ Audio autoplay blocked - showing user prompt');
+                setShowAudioPrompt(true);
+                // Audio will be enabled after user interaction
               });
             }
             
             audioRef.current.onplay = () => {
               console.log('✅ LiveKit audio is now playing!');
               console.log('   🎤 You should hear Luna speaking from the avatar stream');
+              setShowAudioPrompt(false);
             };
             
             audioRef.current.onended = () => {
@@ -341,8 +354,9 @@ const LunaLiveAvatarInterface = () => {
       const targetSampleRate = 24000;
       const tempContext = new (window.AudioContext || window.webkitAudioContext)();
       const decodedBuffer = await tempContext.decodeAudioData(audioArray.buffer);
+      const audioDuration = decodedBuffer.duration; // Capture duration for WebSocket timeout
       console.log('   Original sample rate:', decodedBuffer.sampleRate);
-      console.log('   Original duration:', decodedBuffer.duration.toFixed(2), 'seconds');
+      console.log('   Original duration:', audioDuration.toFixed(2), 'seconds');
       
       // Resample to 24kHz using OfflineAudioContext
       const offlineCtx = new OfflineAudioContext(1, decodedBuffer.duration * targetSampleRate, targetSampleRate);
@@ -357,17 +371,50 @@ const LunaLiveAvatarInterface = () => {
       const pcmBuffer = audioBufferToPCM(resampledBuffer);
       console.log('   PCM buffer size:', pcmBuffer.byteLength, 'bytes');
       
-      // Encode PCM to Base64
-      let binary = '';
-      const bytes = new Uint8Array(pcmBuffer);
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const pcmBase64 = btoa(binary);
+      // Encode PCM to Base64 for WebSocket transmission
+      // According to LiveAvatar docs: audio must be PCM 16-bit 24kHz, Base64 encoded
+      // Must be sent in chunks under 1MB to avoid connection closure
+      const pcmBytes = new Uint8Array(pcmBuffer);
+      
+      // Use FileReader API for reliable base64 encoding of large arrays
+      // This avoids stack overflow and ensures valid base64
+      const pcmBase64 = await new Promise((resolve, reject) => {
+        const blob = new Blob([pcmBytes], { type: 'application/octet-stream' });
+        const reader = new FileReader();
+        
+        reader.onload = () => {
+          // FileReader gives us data URL like "data:application/octet-stream;base64,..."
+          // Extract just the base64 part
+          const dataUrl = reader.result;
+          const base64 = dataUrl.split(',')[1];
+          resolve(base64);
+        };
+        
+        reader.onerror = () => {
+          reject(new Error('Failed to encode PCM to base64'));
+        };
+        
+        reader.readAsDataURL(blob);
+      });
+      
       console.log('   Base64 PCM size:', pcmBase64.length, 'characters');
       
-      // Connect WebSocket
+      // Connect WebSocket for sending audio in chunks
       console.log('🔌 [4/5] Opening WebSocket connection...');
+      
+      // Close any existing WebSocket connection
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+        console.log('   Closing previous WebSocket connection');
+        wsRef.current.close();
+      }
+      if (wsTimeoutRef.current) {
+        clearTimeout(wsTimeoutRef.current);
+        wsTimeoutRef.current = null;
+      }
+      
+      isSpeakingRef.current = false; // Reset speaking flag for new connection
+      audioSentRef.current = false; // Reset audio sent flag
+      expectedDurationRef.current = 0; // Reset expected duration
       const ws = new WebSocket(targetUrl);
       
       ws.onopen = () => {
@@ -376,33 +423,135 @@ const LunaLiveAvatarInterface = () => {
         console.log('   Session ID:', actualSessionId);
         console.log('   🎥 LiveKit video stream should show avatar speaking after sending audio');
         
-        // Send agent.speak event with PCM audio (Custom Mode format)
         const eventId = `speak_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const speakEvent = {
-          type: 'agent.speak',
-          event_id: eventId, // Required by LiveAvatar API
-          audio: pcmBase64
-          // DO NOT include 'text' field - it causes "unknown field" error
-        };
         
-        console.log('🗣️ Sending agent.speak event...');
-        console.log('   Event ID:', eventId);
-        console.log('   Audio size:', pcmBase64.length, 'characters');
-        console.log('   Payload size:', JSON.stringify(speakEvent).length, 'bytes');
-        console.log('   First 50 chars of audio:', pcmBase64.substring(0, 50));
-        console.log('   Timestamp:', new Date().toISOString());
+        // According to LiveAvatar docs: Send audio in chunks under 1MB to avoid connection closure
+        const MAX_CHUNK_SIZE = 800000; // ~800KB base64 chars (safe margin under 1MB)
+        const audioLength = pcmBase64.length;
         
-        ws.send(JSON.stringify(speakEvent));
-        console.log('✅ Audio sent to LiveAvatar for lip-sync!');
+        if (audioLength > MAX_CHUNK_SIZE) {
+          // Split audio into chunks
+          const numChunks = Math.ceil(audioLength / MAX_CHUNK_SIZE);
+          console.log(`📦 Audio is large (${audioLength} chars) - splitting into ${numChunks} chunks`);
+          console.log(`   Each chunk: ~${MAX_CHUNK_SIZE} characters (under 1MB limit)`);
+          
+          // Send first chunk with initial speak event
+          let chunkIndex = 0;
+          const firstChunk = pcmBase64.substring(0, MAX_CHUNK_SIZE);
+          const firstEvent = {
+            type: 'agent.speak',
+            event_id: eventId,
+            audio: firstChunk
+          };
+          
+          try {
+            ws.send(JSON.stringify(firstEvent));
+            console.log(`✅ Sent chunk ${chunkIndex + 1}/${numChunks} (${firstChunk.length} chars)`);
+            chunkIndex++;
+            
+            // Send remaining chunks as sequential agent.speak events
+            // Each chunk is a continuation of the previous one (same event_id)
+            const sendNextChunk = () => {
+              if (chunkIndex < numChunks && ws.readyState === WebSocket.OPEN) {
+                const start = chunkIndex * MAX_CHUNK_SIZE;
+                const end = Math.min(start + MAX_CHUNK_SIZE, audioLength);
+                const chunk = pcmBase64.substring(start, end);
+                
+                // Use agent.speak for all chunks (not a custom event type)
+                // Same event_id groups them together
+                const chunkEvent = {
+                  type: 'agent.speak',
+                  event_id: eventId,
+                  audio: chunk
+                };
+                
+                try {
+                  ws.send(JSON.stringify(chunkEvent));
+                  console.log(`✅ Sent chunk ${chunkIndex + 1}/${numChunks} (${chunk.length} chars)`);
+                  chunkIndex++;
+                  
+                  // Small delay between chunks to prevent overwhelming the server
+                  setTimeout(sendNextChunk, 50); // 50ms delay
+                } catch (chunkError) {
+                  console.error(`❌ Failed to send chunk ${chunkIndex + 1}:`, chunkError);
+                  // Continue with next chunk anyway
+                  chunkIndex++;
+                  setTimeout(sendNextChunk, 100);
+                }
+              } else if (chunkIndex >= numChunks) {
+                console.log('✅ All audio chunks sent to LiveAvatar for lip-sync!');
+                // Send speak_end event to signal completion
+                try {
+                  const speakEndEvent = {
+                    type: 'agent.speak_end',
+                    event_id: eventId
+                  };
+                  ws.send(JSON.stringify(speakEndEvent));
+                  console.log('✅ Sent agent.speak_end event');
+                } catch (endError) {
+                  console.warn('⚠️ Failed to send speak_end event:', endError);
+                }
+                audioSentRef.current = true;
+              }
+            };
+            
+            // Start sending remaining chunks after a short delay
+            setTimeout(sendNextChunk, 100);
+          } catch (firstChunkError) {
+            console.error('❌ Failed to send first chunk:', firstChunkError);
+            audioSentRef.current = false;
+          }
+        } else {
+          // Small audio - send in one message
+          const speakEvent = {
+            type: 'agent.speak',
+            event_id: eventId,
+            audio: pcmBase64
+          };
+          
+          console.log('🗣️ Sending agent.speak event...');
+          console.log('   Event ID:', eventId);
+          console.log('   Audio size:', pcmBase64.length, 'characters');
+          console.log('   Payload size:', JSON.stringify(speakEvent).length, 'bytes');
+          
+          try {
+            ws.send(JSON.stringify(speakEvent));
+            console.log('✅ Audio sent to LiveAvatar for lip-sync!');
+            audioSentRef.current = true;
+          } catch (sendError) {
+            console.error('❌ Failed to send audio via WebSocket:', sendError);
+            audioSentRef.current = false;
+          }
+        }
+        
         console.log('   Waiting for agent.speak_started event...');
         console.log('   🎥 The avatar lips should start moving within 1-2 seconds');
         console.log('   👀 Watch the video carefully for any subtle lip movements');
         
-        // Keep connection open for response
-        setTimeout(() => {
-          console.log('🔌 Closing WebSocket connection');
-          ws.close();
-        }, 10000);
+        // Store WebSocket reference for cleanup
+        wsRef.current = ws;
+        
+        // Track expected duration
+        const expectedDuration = Math.max(10, audioDuration + 5);
+        expectedDurationRef.current = expectedDuration * 1000; // Store in milliseconds
+        console.log(`   ⏱️ Expected response duration: ${expectedDuration.toFixed(1)}s`);
+        console.log('   🔄 WebSocket will stay open until avatar finishes speaking');
+        
+        // Set a very long fallback timeout (5 minutes) as a safety net
+        // This should never trigger if everything works correctly
+        if (wsTimeoutRef.current) {
+          clearTimeout(wsTimeoutRef.current);
+        }
+        wsTimeoutRef.current = setTimeout(() => {
+          console.warn('⚠️ Fallback timeout reached - closing WebSocket after 5 minutes');
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.close();
+          }
+          wsRef.current = null;
+          wsTimeoutRef.current = null;
+          setIsProcessing(false);
+          setEstimatedTime(0);
+        }, 5 * 60 * 1000); // 5 minutes fallback
       };
       
       ws.onerror = (e) => {
@@ -442,6 +591,7 @@ const LunaLiveAvatarInterface = () => {
             // Visual indicator that avatar is speaking
             setStatus('🗣️ Luna is speaking...');
             setIsSpeaking(true);
+            isSpeakingRef.current = true; // Track that speaking has started
           }
           
           // Log important state changes
@@ -456,6 +606,22 @@ const LunaLiveAvatarInterface = () => {
             console.log('   ⏰ Speak ended at:', new Date().toISOString());
             setStatus('Ready');
             setIsSpeaking(false);
+            setIsProcessing(false);
+            setEstimatedTime(0);
+            isSpeakingRef.current = false; // Clear speaking flag
+            audioSentRef.current = false; // Reset audio sent flag
+            expectedDurationRef.current = 0; // Reset expected duration
+            
+            // Close WebSocket now that avatar has finished speaking
+            if (wsTimeoutRef.current) {
+              clearTimeout(wsTimeoutRef.current);
+              wsTimeoutRef.current = null;
+            }
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              console.log('🔌 Closing WebSocket connection (avatar finished speaking)');
+              wsRef.current.close();
+            }
+            wsRef.current = null;
           }
           
           if (message.type === 'warning') {
@@ -475,6 +641,62 @@ const LunaLiveAvatarInterface = () => {
         console.log('   Code:', e.code);
         console.log('   Reason:', e.reason || 'No reason provided');
         console.log('   Clean close:', e.wasClean);
+        
+        // Clear WebSocket reference
+        const wasSpeaking = isSpeakingRef.current;
+        const audioWasSent = audioSentRef.current;
+        const expectedDuration = expectedDurationRef.current;
+        wsRef.current = null;
+        
+        // If WebSocket closed prematurely (code 1006) and avatar was speaking,
+        // the avatar might still be speaking via LiveKit. Don't clear processing state immediately.
+        // The speak_ended handler will clear it when the avatar actually finishes.
+        if (e.code === 1006 && wasSpeaking) {
+          console.warn('⚠️ WebSocket closed abnormally while avatar was speaking');
+          console.log('   Avatar may still be speaking via LiveKit stream');
+          console.log('   Processing state will clear when avatar finishes (via speak_ended event)');
+          // Don't clear processing state here - let speak_ended handler do it
+        } else if (e.code === 1006 && audioWasSent) {
+          // WebSocket closed before speaking started BUT audio was already sent
+          // The avatar might still process and speak via LiveKit, so wait for full duration
+          console.warn('⚠️ WebSocket closed before avatar started speaking, but audio was sent');
+          console.log(`   ⏱️ Waiting ${(expectedDuration / 1000).toFixed(1)}s for avatar to process and speak via LiveKit`);
+          console.log('   🔊 Avatar may still start speaking even without WebSocket events');
+          console.log('   👀 Watch the video - avatar should start speaking soon');
+          console.log('   📊 Processing indicator will remain visible during this time');
+          
+          // Wait for the full expected duration + buffer before clearing processing state
+          // This gives the avatar time to process the audio and speak via LiveKit
+          setTimeout(() => {
+            if (isProcessing && !isSpeakingRef.current) {
+              console.log('⏱️ Processing timeout reached - avatar did not start speaking');
+              console.log('   Clearing processing state');
+              setIsProcessing(false);
+              setEstimatedTime(0);
+            } else if (isSpeakingRef.current) {
+              console.log('✅ Avatar started speaking via LiveKit (detected after WebSocket closed)');
+              // Don't clear processing state - let speak_ended handler do it
+            }
+          }, expectedDuration + 10000); // Expected duration + 10s buffer
+        } else if (e.code === 1006) {
+          // WebSocket closed before audio was sent - connection issue
+          console.warn('⚠️ WebSocket closed before audio could be sent');
+          // Clear processing state after a short delay
+          setTimeout(() => {
+            setIsProcessing(false);
+            setEstimatedTime(0);
+          }, 5000); // 5 second delay
+        }
+        
+        // Reset audio sent flag
+        audioSentRef.current = false;
+        expectedDurationRef.current = 0;
+        
+        // Clear timeout if WebSocket closed
+        if (wsTimeoutRef.current) {
+          clearTimeout(wsTimeoutRef.current);
+          wsTimeoutRef.current = null;
+        }
       };
       
     } catch (e) {
@@ -507,8 +729,9 @@ const LunaLiveAvatarInterface = () => {
 
       console.log('📤 Sending message to LiveAvatar backend:', message);
       setStatus('Processing...');
+      setIsProcessing(true);
 
-      // Don't hardcode avatar_id - let backend use the one from .env
+      // Use the correct avatar_id with custom background
       const response = await fetch('http://13.62.188.127:8000/api/liveavatar/chat-custom/', {
         method: 'POST',
         headers: {
@@ -517,8 +740,8 @@ const LunaLiveAvatarInterface = () => {
         body: JSON.stringify({
           message: message,
           session_id: 'luna-liveavatar-custom-session',
-          voice: 'shimmer'
-          // avatar_id will be taken from .env by backend
+          voice: 'shimmer',
+          avatar_id: '073b60a9-89a8-45aa-8902-c358f64d2852'  // Luna avatar with custom background
         })
       });
 
@@ -566,28 +789,29 @@ const LunaLiveAvatarInterface = () => {
         console.log('🤐 Skipping text bubble for auto-greeting (Audio/Video only)');
       }
       
+      // Store session info for reuse
+      if (result.session_token && result.session_id) {
+        sessionTokenRef.current = result.session_token;
+        sessionIdRef.current = result.session_id;
+        wsUrlRef.current = result.url || result.realtime_endpoint;
+      }
+      
       // Connect to LiveKit for video streaming
       if (result.livekit_url && result.livekit_token) {
-        // Disconnect from previous session first to avoid session mismatch
-        if (roomRef.current && roomRef.current.state === 'connected') {
-          console.log('⚠️ Disconnecting from OLD LiveKit session:', roomRef.current.name);
-          await roomRef.current.disconnect();
-          roomRef.current = null;
-        }
-        
-        console.log('Connecting to LiveKit for avatar video...');
-        console.log('   NEW Session ID:', result.session_id);
+        const avatarId = '073b60a9-89a8-45aa-8902-c358f64d2852';
+        console.log('🎬 Connecting to LiveKit for avatar video (initial setup)...');
+        console.log('   Session ID:', result.session_id);
+        console.log('   Avatar ID:', avatarId);
+        currentAvatarIdRef.current = avatarId;
         setLiveKitUrl(result.livekit_url);
         setStatus('Connecting to avatar...');
         await connectToLiveKit(result.livekit_url, result.livekit_token);
-        setStatus('Avatar ready - Streaming...');
+        setStatus('Avatar ready');
         
-        // Push audio to LiveAvatar - it will handle speaking and streaming back via LiveKit
-        console.log('✅ LiveKit connected - Sending audio to LiveAvatar');
+        // Push audio to LiveAvatar for initial greeting
         if (result.audio_base64) {
-          console.log('🔌 Pushing audio to LiveAvatar for lip-sync...');
+          console.log('🔌 Pushing greeting audio to LiveAvatar...');
           setTimeout(() => {
-            // LiveAvatar will animate the avatar and stream audio back via LiveKit
             pushAudioToLiveAvatar(result.audio_base64, result.url || result.realtime_endpoint, result.session_id, result.session_token);
           }, 500); // Wait for LiveKit to fully connect
         }
@@ -615,6 +839,8 @@ const LunaLiveAvatarInterface = () => {
       };
       setConversation(prev => [...prev, fallbackGreeting]);
       setStatus(`Error: ${error.message}. Please try again.`);
+      setIsProcessing(false);
+      setEstimatedTime(0);
       
       throw error;
     }
@@ -647,6 +873,7 @@ const LunaLiveAvatarInterface = () => {
       // Process the message using LiveAvatar Custom Mode pipeline
       console.log('Processing user message (Custom Mode):', userMessageText);
       setStatus('Thinking...');
+      setIsProcessing(true);
       
       try {
         const response = await fetch('http://13.62.188.127:8000/api/liveavatar/chat-custom/', {
@@ -657,8 +884,8 @@ const LunaLiveAvatarInterface = () => {
           body: JSON.stringify({
             message: userMessageText,
             session_id: 'luna-liveavatar-custom-session',
-            voice: 'shimmer'
-            // avatar_id will be taken from .env by backend
+            voice: 'shimmer',
+            avatar_id: '073b60a9-89a8-45aa-8902-c358f64d2852'  // Luna avatar with custom background
           })
         });
         
@@ -677,40 +904,67 @@ const LunaLiveAvatarInterface = () => {
           timestamp: new Date().toISOString()
         };
         setConversation(prev => [...prev, lunaMessage]);
+        
+        // Estimate response time based on text length (rough: ~150 words per minute speaking)
+        const wordCount = lunaResponse.split(/\s+/).length;
+        const estimatedSeconds = Math.ceil((wordCount / 150) * 60);
+        setEstimatedTime(estimatedSeconds);
+        console.log(`⏱️ Estimated response time: ${estimatedSeconds}s for ${wordCount} words`);
 
-        // Store LiveAvatar session and LiveKit info for endSession and streaming
+        // Store session info for reuse
         if (result.session_token && result.session_id) {
+          sessionTokenRef.current = result.session_token;
+          sessionIdRef.current = result.session_id;
+          wsUrlRef.current = result.url || result.realtime_endpoint;
           liveAvatarService.sessionToken = result.session_token;
           liveAvatarService.currentSession = result.session_id;
           liveAvatarService.isSessionActive = true;
         }
+        
+        // Check if we already have an active LiveKit connection
+        const isAlreadyConnected = roomRef.current && roomRef.current.state === 'connected' && liveKitUrl;
+        
+        // Check if the LiveKit URL or avatar has changed
+        const hasUrlChanged = result.livekit_url && result.livekit_url !== liveKitUrl;
+        const avatarId = '073b60a9-89a8-45aa-8902-c358f64d2852';
+        const hasAvatarChanged = currentAvatarIdRef.current && currentAvatarIdRef.current !== avatarId;
+        
         if (result.livekit_url && result.livekit_token) {
-          // Disconnect from previous session first to avoid session mismatch
-          if (roomRef.current && roomRef.current.state === 'connected') {
-            console.log('⚠️ Disconnecting from OLD LiveKit session:', roomRef.current.name);
-            await roomRef.current.disconnect();
-            roomRef.current = null;
+          if (!isAlreadyConnected || hasUrlChanged || hasAvatarChanged) {
+            // Connect or reconnect to LiveKit if needed
+            if (isAlreadyConnected && (hasUrlChanged || hasAvatarChanged)) {
+              console.log('🔄 Avatar or session changed - reconnecting to LiveKit...');
+              await roomRef.current.disconnect();
+              roomRef.current = null;
+            } else {
+              console.log('🎬 Connecting to LiveKit for the first time...');
+            }
+            
+            console.log('   Session ID:', result.session_id);
+            console.log('   Avatar ID:', avatarId);
+            currentAvatarIdRef.current = avatarId;
+            liveAvatarService.liveKitUrl = result.livekit_url;
+            liveAvatarService.liveKitToken = result.livekit_token;
+            await connectToLiveKit(result.livekit_url, result.livekit_token);
+            setLiveKitUrl(result.livekit_url);
+            setStatus('LiveAvatar ready');
+          } else {
+            console.log('✅ Already connected to LiveKit - reusing existing session');
           }
-          
-          console.log('Connecting to NEW LiveKit session...');
-          console.log('   NEW Session ID:', result.session_id);
-          liveAvatarService.liveKitUrl = result.livekit_url;
-          liveAvatarService.liveKitToken = result.livekit_token;
-          await connectToLiveKit(result.livekit_url, result.livekit_token);
-          setLiveKitUrl(result.livekit_url);
-          setStatus('LiveAvatar streaming...');
-          
-          // Push audio to LiveAvatar - it will handle speaking and streaming back
-          console.log('✅ LiveKit connected - Sending audio to LiveAvatar');
-          if (result.audio_base64) {
-            console.log('🔌 Pushing audio to LiveAvatar via WebSocket...');
-            setTimeout(() => {
-              // Let LiveAvatar handle EVERYTHING - audio + video + lip-sync
-              pushAudioToLiveAvatar(result.audio_base64, result.url || result.realtime_endpoint, result.session_id, result.session_token);
-            }, 500); // Wait for LiveKit to fully connect
-          }
-          
-        } else {
+        }
+        
+        // Push audio to LiveAvatar for lip-sync (works whether newly connected or reusing)
+        if (result.audio_base64) {
+          console.log('🔌 Pushing audio to existing LiveAvatar session...');
+          setTimeout(() => {
+            pushAudioToLiveAvatar(
+              result.audio_base64, 
+              wsUrlRef.current || result.url || result.realtime_endpoint, 
+              sessionIdRef.current || result.session_id, 
+              sessionTokenRef.current || result.session_token
+            );
+          }, isAlreadyConnected ? 100 : 500); // Shorter delay if already connected
+        } else if (!result.livekit_url) {
           // Fallback if no LiveKit
           if (result.audio_base64) {
             console.log('🎵 Playing OpenAI TTS audio (local fallback)...');
@@ -833,12 +1087,27 @@ const LunaLiveAvatarInterface = () => {
   return (
     <div 
       className="luna-heygen-interface"
-      onClick={() => {
+      onClick={async () => {
         if (!audioContext) {
-          initializeAudioContext();
+          await initializeAudioContext();
         }
         if (showAudioPrompt) {
           setShowAudioPrompt(false);
+          // Enable LiveKit audio playback after user interaction
+          if (audioRef.current && audioRef.current.paused) {
+            try {
+              await audioRef.current.play();
+              console.log('✅ Audio enabled after user interaction');
+            } catch (err) {
+              console.error('Failed to enable audio:', err);
+            }
+          }
+          // Retry playing pending audio if available
+          if (pendingAudioRef.current) {
+            const audioToPlay = pendingAudioRef.current;
+            pendingAudioRef.current = null;
+            playAudioResponse(audioToPlay);
+          }
         }
       }}
     >
@@ -859,25 +1128,126 @@ const LunaLiveAvatarInterface = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(52, 26, 96, 0.95)',
+            backdropFilter: 'blur(10px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            animation: 'fadeIn 0.3s ease-in-out'
           }}>
             <div style={{
-              background: '#fff',
-              padding: '2rem',
-              borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(52, 26, 96, 0.95) 0%, rgba(74, 35, 128, 0.95) 100%)',
+              padding: '3rem',
+              borderRadius: '20px',
               textAlign: 'center',
-              maxWidth: '400px'
+              maxWidth: '450px',
+              border: '2px solid rgba(150, 107, 252, 0.5)',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(150, 107, 252, 0.3)'
             }}>
-              <h3 style={{ margin: '0 0 1rem 0', color: '#333' }}>🔊 Click to hear Luna</h3>
-              <p style={{ margin: 0, color: '#666' }}>Your browser requires interaction to play audio</p>
+              <div style={{
+                fontSize: '64px',
+                marginBottom: '20px',
+                animation: 'pulse-glow 2s ease-in-out infinite'
+              }}>🔊</div>
+              <h3 style={{ 
+                margin: '0 0 1rem 0', 
+                color: '#ffffff',
+                fontSize: '24px',
+                fontWeight: '700',
+                letterSpacing: '0.5px'
+              }}>
+                Click to Enable Audio
+              </h3>
+              <p style={{ 
+                margin: 0, 
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontSize: '16px',
+                lineHeight: '1.5'
+              }}>
+                Tap anywhere to hear Luna speak
+              </p>
             </div>
           </div>
         )}
+
+        {/* Processing Indicator - Top Left */}
+        {isProcessing && (
+          <div className="processing-indicator" style={{
+            position: 'fixed',
+            top: '20px',
+            left: '20px',
+            zIndex: 500,
+            background: 'linear-gradient(135deg, rgba(52, 26, 96, 0.95) 0%, rgba(74, 35, 128, 0.95) 100%)',
+            backdropFilter: 'blur(20px)',
+            padding: '16px 24px',
+            borderRadius: '16px',
+            border: '2px solid rgba(150, 107, 252, 0.5)',
+            boxShadow: '0 8px 32px rgba(52, 26, 96, 0.5), 0 0 40px rgba(150, 107, 252, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            animation: 'slideInLeft 0.4s ease-out'
+          }}>
+            {/* Animated Spinner */}
+            <div style={{
+              width: '24px',
+              height: '24px',
+              border: '3px solid rgba(150, 107, 252, 0.3)',
+              borderTop: '3px solid #D4AF37',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            
+            {/* Text */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }}>
+              <div style={{
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: '600',
+                letterSpacing: '0.5px'
+              }}>
+                Luna is responding...
+              </div>
+              {estimatedTime > 0 && (
+                <div style={{
+                  color: 'rgba(212, 175, 55, 0.9)',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}>
+                  ~{estimatedTime}s
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <style>{`
+          @keyframes slideInLeft {
+            from {
+              opacity: 0;
+              transform: translateX(-20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+          
+          @media (max-width: 768px) {
+            .processing-indicator {
+              top: 10px !important;
+              left: 10px !important;
+              padding: 12px 16px !important;
+              font-size: 12px !important;
+            }
+          }
+        `}</style>
 
         {/* Full-screen avatar video */}
         {!liveKitUrl ? (
@@ -890,58 +1260,186 @@ const LunaLiveAvatarInterface = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            background: 'linear-gradient(135deg, #341a60 0%, #4a2380 50%, #966bfc 100%)',
+            overflow: 'hidden'
           }}>
-            <div style={{ textAlign: 'center', color: 'white' }}>
-              <div className="spinner" style={{
-                width: '50px',
-                height: '50px',
-                border: '4px solid rgba(255,255,255,0.3)',
-                borderTop: '4px solid white',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 20px'
-              }}></div>
-              <p style={{ fontSize: '18px', fontWeight: '500' }}>
-                {status === 'Initializing LiveAvatar...' ? 'Starting secure session...' : status}
-              </p>
+            {/* Animated background particles */}
+            <div style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              opacity: 0.3
+            }}>
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    width: `${100 + i * 30}px`,
+                    height: `${100 + i * 30}px`,
+                    border: '2px solid rgba(150, 107, 252, 0.4)',
+                    borderRadius: '50%',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    animation: `ripple ${2 + i * 0.5}s ease-out infinite`,
+                    animationDelay: `${i * 0.3}s`
+                  }}
+                />
+              ))}
             </div>
+            
+            {/* Luna logo/avatar with glow */}
+            <div style={{ 
+              textAlign: 'center', 
+              color: 'white',
+              position: 'relative',
+              zIndex: 10
+            }}>
+              <div style={{
+                position: 'relative',
+                width: '120px',
+                height: '120px',
+                margin: '0 auto 30px',
+                borderRadius: '50%',
+                overflow: 'hidden',
+                boxShadow: '0 0 60px rgba(150, 107, 252, 0.8), 0 0 120px rgba(212, 175, 55, 0.4)',
+                animation: 'pulse-glow 2s ease-in-out infinite',
+                border: '3px solid rgba(212, 175, 55, 0.6)'
+              }}>
+                <img 
+                  src="/Luna.png" 
+                  alt="Luna" 
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    animation: 'gentle-zoom 3s ease-in-out infinite'
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'radial-gradient(circle, transparent 40%, rgba(150, 107, 252, 0.3) 100%)',
+                  animation: 'rotate 8s linear infinite'
+                }}/>
+              </div>
+              
+              <h2 style={{ 
+                fontSize: '28px', 
+                fontWeight: '700',
+                marginBottom: '12px',
+                background: 'linear-gradient(135deg, #ffffff 0%, #D4AF37 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                letterSpacing: '1px'
+              }}>
+                Luna
+              </h2>
+              
+              <p style={{ 
+                fontSize: '16px', 
+                fontWeight: '400',
+                color: 'rgba(255, 255, 255, 0.8)',
+                marginBottom: '30px',
+                letterSpacing: '0.5px'
+              }}>
+                Initializing AI Avatar...
+              </p>
+              
+              {/* Modern loading bar */}
+              <div style={{
+                width: '200px',
+                height: '4px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                borderRadius: '2px',
+                margin: '0 auto',
+                overflow: 'hidden',
+                position: 'relative'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
+                  width: '50%',
+                  background: 'linear-gradient(90deg, #D4AF37 0%, #966bfc 100%)',
+                  borderRadius: '2px',
+                  animation: 'loading-slide 1.5s ease-in-out infinite'
+                }}/>
+              </div>
+            </div>
+            
+            <style>{`
+              @keyframes ripple {
+                0% {
+                  transform: translate(-50%, -50%) scale(0.8);
+                  opacity: 1;
+                }
+                100% {
+                  transform: translate(-50%, -50%) scale(1.5);
+                  opacity: 0;
+                }
+              }
+              
+              @keyframes pulse-glow {
+                0%, 100% {
+                  box-shadow: 0 0 60px rgba(150, 107, 252, 0.8), 0 0 120px rgba(212, 175, 55, 0.4);
+                  transform: scale(1);
+                }
+                50% {
+                  box-shadow: 0 0 80px rgba(150, 107, 252, 1), 0 0 160px rgba(212, 175, 55, 0.6);
+                  transform: scale(1.05);
+                }
+              }
+              
+              @keyframes gentle-zoom {
+                0%, 100% {
+                  transform: scale(1);
+                }
+                50% {
+                  transform: scale(1.1);
+                }
+              }
+              
+              @keyframes rotate {
+                from {
+                  transform: rotate(0deg);
+                }
+                to {
+                  transform: rotate(360deg);
+                }
+              }
+              
+              @keyframes loading-slide {
+                0% {
+                  left: -50%;
+                }
+                100% {
+                  left: 100%;
+                }
+              }
+            `}</style>
           </div>
         ) : (
-          <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted={false}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover'
-              }}
-            />
-            {isSpeaking && (
-              <div style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'rgba(255, 0, 0, 0.9)',
-                color: 'white',
-                padding: '10px 20px',
-                borderRadius: '25px',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                zIndex: 100,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                backdropFilter: 'blur(10px)'
-              }}>
-                🎤 SPEAKING
-              </div>
-            )}
-          </>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted={false}
+            style={{
+              position: 'absolute',
+              top: '0',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '100%',
+              height: '110%',
+              objectFit: 'cover',
+              objectPosition: 'center top',
+              animation: 'fadeIn 1s ease-in-out'
+            }}
+          />
         )}
         
         <audio
@@ -977,27 +1475,29 @@ const LunaLiveAvatarInterface = () => {
                   onClick={() => handleSuggestedQuestionClick(q.question)}
                   disabled={!isSessionActive}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    border: 'none',
+                    background: 'linear-gradient(135deg, rgba(52, 26, 96, 0.8) 0%, rgba(74, 35, 128, 0.8) 100%)',
+                    border: '2px solid rgba(150, 107, 252, 0.5)',
                     padding: '10px 20px',
                     borderRadius: '20px',
                     fontSize: '14px',
-                    color: '#333',
+                    color: '#ffffff',
                     cursor: 'pointer',
                     backdropFilter: 'blur(10px)',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                    boxShadow: '0 2px 10px rgba(150, 107, 252, 0.3)',
                     transition: 'all 0.2s',
                     fontWeight: '500'
                   }}
                   onMouseOver={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 1)';
+                    e.target.style.background = 'linear-gradient(135deg, #341a60 0%, #966bfc 100%)';
                     e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+                    e.target.style.boxShadow = '0 4px 15px rgba(150, 107, 252, 0.5)';
+                    e.target.style.borderColor = '#966bfc';
                   }}
                   onMouseOut={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.95)';
+                    e.target.style.background = 'linear-gradient(135deg, rgba(52, 26, 96, 0.8) 0%, rgba(74, 35, 128, 0.8) 100%)';
                     e.target.style.transform = 'translateY(0)';
-                    e.target.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+                    e.target.style.boxShadow = '0 2px 10px rgba(150, 107, 252, 0.3)';
+                    e.target.style.borderColor = 'rgba(150, 107, 252, 0.5)';
                   }}
                 >
                   {q.question}
@@ -1013,10 +1513,13 @@ const LunaLiveAvatarInterface = () => {
               display: 'flex',
               gap: '10px',
               padding: '20px',
-              background: 'linear-gradient(180deg, rgba(52, 26, 96, 0.85) 0%, rgba(74, 35, 128, 0.95) 100%)',
-              backdropFilter: 'blur(20px)',
-              borderTop: '1px solid rgba(150, 107, 252, 0.3)',
-              pointerEvents: 'auto'
+              background: 'transparent',
+              backdropFilter: 'none',
+              border: 'none',
+              pointerEvents: 'auto',
+              maxWidth: '70%',
+              margin: '0 auto',
+              width: '100%'
             }}
           >
             <input
@@ -1029,11 +1532,13 @@ const LunaLiveAvatarInterface = () => {
                 flex: 1,
                 padding: '15px 20px',
                 borderRadius: '25px',
-                border: 'none',
+                border: '2px solid rgba(150, 107, 252, 0.5)',
                 fontSize: '16px',
-                background: 'rgba(255, 255, 255, 0.95)',
-                color: '#333',
-                outline: 'none'
+                background: 'rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                outline: 'none',
+                transition: 'all 0.3s',
+                backdropFilter: 'blur(10px)'
               }}
             />
             <button 

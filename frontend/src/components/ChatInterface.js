@@ -992,7 +992,7 @@ const ChatInterface = () => {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
-        onDeleteAllConversations={handleDeleteAllConversations}
+        onAvatarToggle={onAvatarToggle}
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />

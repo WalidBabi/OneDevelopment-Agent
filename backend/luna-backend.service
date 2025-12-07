@@ -7,6 +7,7 @@ Type=simple
 User=ec2-user
 WorkingDirectory=/home/ec2-user/OneDevelopment-Agent/backend
 Environment=PATH=/home/ec2-user/OneDevelopment-Agent/backend/venv/bin
+Environment=LIVEAVATAR_AVATAR_ID=073b60a9-89a8-45aa-8902-c358f64d2852
 ExecStart=/home/ec2-user/OneDevelopment-Agent/backend/venv/bin/python manage.py runserver 0.0.0.0:8000
 Restart=always
 RestartSec=10

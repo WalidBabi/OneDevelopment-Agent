@@ -12,9 +12,13 @@ case "$1" in
     # Set avatar service URL (update this when ngrok restarts)
     export AVATAR_SERVICE_URL="https://fa8978e3c6ef.ngrok-free.app"
     
+    # Set LiveAvatar avatar ID
+    export LIVEAVATAR_AVATAR_ID="073b60a9-89a8-45aa-8902-c358f64d2852"
+    
     nohup python manage.py runserver 0.0.0.0:8000 > /tmp/backend.log 2>&1 &
     echo "✅ Backend started on port 8000"
     echo "   Avatar Service URL: $AVATAR_SERVICE_URL"
+    echo "   LiveAvatar ID: $LIVEAVATAR_AVATAR_ID"
     
     # Start Frontend
     cd /home/ec2-user/OneDevelopment-Agent/frontend

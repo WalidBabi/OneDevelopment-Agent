@@ -43,31 +43,124 @@
   transform: translateY(0);
 }
 
-.delete-all-btn {
+/* Creative Avatar Toggle Button */
+.avatar-toggle-btn {
   width: 100%;
-  padding: 10px 14px;
-  background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(150, 107, 252, 0.25) 0%, rgba(212, 175, 55, 0.15) 100%);
+  border: 2px solid rgba(150, 107, 252, 0.4);
+  border-radius: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.3s ease;
+  gap: 12px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.delete-all-btn:hover {
-  background: rgba(239, 68, 68, 0.35);
-  border-color: rgba(239, 68, 68, 0.6);
-  transform: translateY(-2px);
+.avatar-toggle-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s ease;
 }
 
-.delete-all-btn:active {
-  transform: translateY(0);
+.avatar-toggle-btn:hover::before {
+  left: 100%;
+}
+
+.avatar-toggle-btn:hover {
+  background: linear-gradient(135deg, rgba(150, 107, 252, 0.35) 0%, rgba(212, 175, 55, 0.25) 100%);
+  border-color: rgba(150, 107, 252, 0.6);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(150, 107, 252, 0.4), 0 0 40px rgba(150, 107, 252, 0.2);
+}
+
+.avatar-toggle-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.avatar-toggle-icon {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.avatar-icon-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(150, 107, 252, 0.6);
+  box-shadow: 0 4px 12px rgba(150, 107, 252, 0.4);
+  animation: avatarPulse 3s ease-in-out infinite;
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes avatarPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(150, 107, 252, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(150, 107, 252, 0.6), 0 0 30px rgba(212, 175, 55, 0.3);
+  }
+}
+
+.avatar-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(150, 107, 252, 0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: glowPulse 2s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3);
+  }
+}
+
+.avatar-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  text-align: left;
+}
+
+.avatar-toggle-label {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.avatar-toggle-subtitle {
+  color: rgba(212, 175, 55, 0.95);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .conversations-list {
@@ -296,9 +389,21 @@
     font-size: 13px;
   }
 
-  .delete-all-btn {
-    padding: 8px 12px;
-    font-size: 12px;
+  .avatar-toggle-btn {
+    padding: 12px 14px;
+  }
+  
+  .avatar-toggle-icon {
+    width: 42px;
+    height: 42px;
+  }
+  
+  .avatar-toggle-label {
+    font-size: 13px;
+  }
+  
+  .avatar-toggle-subtitle {
+    font-size: 10px;
   }
 
   .conversations-list {

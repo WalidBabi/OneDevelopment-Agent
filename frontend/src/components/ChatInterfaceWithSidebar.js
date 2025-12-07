@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import Sidebar from './Sidebar';
 import './ChatInterface.css';
 
-const ChatInterface = () => {
+const ChatInterface = ({ onAvatarToggle }) => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -225,6 +225,7 @@ const ChatInterface = () => {
         currentSessionId={sessionId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onAvatarToggle={onAvatarToggle}
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />

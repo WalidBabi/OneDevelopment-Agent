@@ -7,7 +7,7 @@ const Sidebar = ({
   onSelectConversation, 
   onNewConversation,
   onDeleteConversation,
-  onDeleteAllConversations,
+  onAvatarToggle,
   isCollapsed,
   onToggle 
 }) => {
@@ -69,14 +69,21 @@ const Sidebar = ({
             <span>➕</span>
             <span>New Conversation</span>
           </button>
-          {conversations.length > 0 && (
+          {onAvatarToggle && (
             <button
-              className="delete-all-btn"
-              onClick={onDeleteAllConversations}
+              className="avatar-toggle-btn"
+              onClick={onAvatarToggle}
               type="button"
+              title="Switch to Live Avatar"
             >
-              <span>🗑️</span>
-              <span>Delete All</span>
+              <div className="avatar-toggle-icon">
+                <img src="/Luna.png" alt="Luna Avatar" className="avatar-icon-img" />
+                <div className="avatar-glow"></div>
+              </div>
+              <div className="avatar-toggle-text">
+                <span className="avatar-toggle-label">Talk to Luna Live</span>
+                <span className="avatar-toggle-subtitle">Avatar Mode ✨</span>
+              </div>
             </button>
           )}
         </div>

@@ -17,6 +17,9 @@ source venv/bin/activate
 # Set avatar service URL (update this when ngrok restarts)
 export AVATAR_SERVICE_URL="https://fa8978e3c6ef.ngrok-free.app"
 
+# Set LiveAvatar avatar ID
+export LIVEAVATAR_AVATAR_ID="073b60a9-89a8-45aa-8902-c358f64d2852"
+
 nohup python manage.py runserver 0.0.0.0:8000 > ../server.log 2>&1 &
 
 # Wait for startup
