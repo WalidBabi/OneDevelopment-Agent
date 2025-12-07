@@ -39,13 +39,20 @@
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-  background: #1a0f30;
+  background: #000;
   color: var(--text-primary);
   font-family: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow: hidden;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
   margin: 0;
   padding: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Animated background gradient orbs */
@@ -685,7 +692,24 @@
 /* Status indicator moved to header */
 
 .conversation-container {
-  display: none;
+  display: flex;
+  flex-direction: column;
+  height: 35%;
+  min-height: 200px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(150, 107, 252, 0.2);
+  padding: 20px;
+  z-index: 10;
+}
+
+.avatar-section {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .messages {

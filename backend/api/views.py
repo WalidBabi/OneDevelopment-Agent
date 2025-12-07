@@ -1726,15 +1726,16 @@ def liveavatar_chat_with_custom_mode(request):
         }
         openai_voice = voice_mapping.get(voice, 'nova')
         
+        # Generate audio in WAV format for better compatibility with LiveAvatar
         tts_response = client.audio.speech.create(
             model="tts-1",
             voice=openai_voice,
             input=text_response,
-            response_format="mp3"
+            response_format="wav"  # WAV format for LiveAvatar compatibility
         )
         
         audio_bytes = tts_response.content
-        logger.info(f"TTS audio generated: {len(audio_bytes)} bytes")
+        logger.info(f"TTS audio generated (WAV): {len(audio_bytes)} bytes")
         
         # Step 3: Create LiveAvatar Custom Mode session (LiveAvatar handles TTS internally)
         logger.info(f"Creating LiveAvatar session with customer support voice")
@@ -1747,14 +1748,13 @@ def liveavatar_chat_with_custom_mode(request):
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         
         # Create session token for Custom Mode using LiveAvatar API
+        # Use avatar_id from request, fallback to env, then to default
+        actual_avatar_id = avatar_id or os.getenv('LIVEAVATAR_AVATAR_ID', '26393b8e-e944-4367-98ef-e2bc75c4b792')
+        logger.info(f"Using avatar_id: {actual_avatar_id} (from request: {avatar_id}, from env: {os.getenv('LIVEAVATAR_AVATAR_ID', 'not set')})")
+        
         token_payload = {
-            'avatar_id': '26393b8e-e944-4367-98ef-e2bc75c4b792',  # Correct Luna avatar ID from env
-            'mode': 'FULL',  # Use FULL mode to get LiveKit info from LiveAvatar
-            'avatar_persona': {
-                'voice_id': '4f3b1e99-b580-4f05-9b67-a5f585be0232',  # Luna's voice ID
-                'context_id': '16813a91-60d3-4db8-ac89-fbee6c46a989',  # Default context required by LiveAvatar
-                'language': 'en'
-            }
+            'avatar_id': actual_avatar_id,  # Use avatar_id from request or env
+            'mode': 'CUSTOM'  # Use CUSTOM mode to push our own audio
         }
         
         # Add custom LiveKit room if provided
@@ -1793,16 +1793,15 @@ def liveavatar_chat_with_custom_mode(request):
                 'details': 'No session token in response'
             }, status=status.HTTP_502_BAD_GATEWAY)
         
-        # Start the session with our OpenAI text
+        # Start the session (Empty for Custom Mode - we'll send audio separately)
         start_headers = {
             'Authorization': f'Bearer {session_token}',
             'Content-Type': 'application/json'
         }
         
-        start_payload = {
-            'text': text_response  # Send our OpenAI-generated text
-        }
+        start_payload = {}
         
+        logger.info(f"Starting Custom Mode session (no text - audio only)")
         start_response = requests.post(
             f'{liveavatar_base_url}/v1/sessions/start',
             headers=start_headers,
@@ -1812,37 +1811,49 @@ def liveavatar_chat_with_custom_mode(request):
         
         livekit_url = None
         livekit_token = None
+        ws_url = None
         if start_response.ok:
             start_data = start_response.json()
+            logger.info(f"Start session response keys: {list(start_data.keys())}")
+            
             # The actual data is nested under 'data' key
             start_response_data = start_data.get('data', {})
+            logger.info(f"Start session data keys: {list(start_response_data.keys())}")
+            logger.info(f"Full start session data: {start_response_data}")
+            
             livekit_url = start_response_data.get('livekit_url')
             livekit_token = start_response_data.get('livekit_client_token')
+            ws_url = start_response_data.get('url') or start_response_data.get('realtime_endpoint') or start_response_data.get('ws_url') or start_response_data.get('websocket_url')
+            
+            logger.info(f"Extracted URLs - LiveKit: {livekit_url is not None}, WebSocket: {ws_url}")
             logger.info(f"LiveAvatar Custom Mode session started: {liveavatar_session_id}")
             
-            # Step 4: Send OpenAI TTS audio to LiveAvatar Custom Mode session
-            logger.info(f"Sending OpenAI TTS audio to LiveAvatar session")
+            # Step 4: Send OpenAI TTS audio to LiveAvatar Custom Mode
+            logger.info(f"Sending OpenAI TTS audio to LiveAvatar session {liveavatar_session_id}")
             
-            # Encode audio as base64 for LiveAvatar
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-            
-            audio_payload = {
-                'audio_data': audio_base64,
-                'session_token': session_token,
-                'format': 'mp3'
+            # Try the session-specific audio endpoint with WAV data
+            audio_headers = {
+                'Authorization': f'Bearer {session_token}',
+                'Content-Type': 'audio/wav'
             }
             
+            # Send audio data to the session
             audio_response = requests.post(
                 f'{liveavatar_base_url}/v1/sessions/{liveavatar_session_id}/audio',
-                headers=start_headers,
-                json=audio_payload,
+                headers=audio_headers,
+                data=audio_bytes,  # Send WAV audio data directly as binary
                 timeout=30
             )
             
+            logger.info(f"Audio upload response status: {audio_response.status_code}")
             if audio_response.ok:
-                logger.info(f"OpenAI TTS audio sent successfully to LiveAvatar")
+                logger.info(f"✅ OpenAI TTS audio sent successfully to LiveAvatar")
+                logger.info(f"Response: {audio_response.text if audio_response.text else 'Empty response'}")
             else:
-                logger.error(f"Failed to send audio to LiveAvatar: {audio_response.status_code} - {audio_response.text}")
+                logger.error(f"❌ Failed to send audio to LiveAvatar: {audio_response.status_code}")
+                logger.error(f"Error details: {audio_response.text}")
+                logger.error(f"Request headers: {audio_headers}")
+                logger.error(f"Request URL: {liveavatar_base_url}/v1/sessions/{liveavatar_session_id}/audio")
                 
         else:
             # Log error but continue returning Luna's response without streaming info
@@ -1858,6 +1869,8 @@ def liveavatar_chat_with_custom_mode(request):
             'session_id': liveavatar_session_id,
             'livekit_url': livekit_url,
             'livekit_token': livekit_token,
+            'url': ws_url,  # Use extracted WebSocket URL
+            'realtime_endpoint': ws_url,  # Use same for compatibility
             'session_token': session_token,
             'avatar_id': avatar_id,
             'conversation_session_id': session_id
