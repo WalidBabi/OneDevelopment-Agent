@@ -1,0 +1,17 @@
+[Unit]
+Description=Luna Backend Server
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/OneDevelopment-Agent/backend
+Environment=PATH=/home/ec2-user/OneDevelopment-Agent/backend/venv/bin
+ExecStart=/home/ec2-user/OneDevelopment-Agent/backend/venv/bin/python manage.py runserver 0.0.0.0:8000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

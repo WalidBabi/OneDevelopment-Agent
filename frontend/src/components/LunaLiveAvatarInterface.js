@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { Room, RoomEvent } from 'livekit-client';
+import chatService from '../services/api';
 import liveAvatarService from '../services/liveavatar';
-import { chatService } from '../services/api';
 import './LunaHeyGenInterface.css';
 
 const LunaLiveAvatarInterface = () => {
@@ -13,11 +13,13 @@ const LunaLiveAvatarInterface = () => {
   const [liveKitUrl, setLiveKitUrl] = useState(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [audioContext, setAudioContext] = useState(null);
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
   const messagesEndRef = useRef(null);
   const roomRef = useRef(null);
 
-  // Initialize UI (Custom Mode will start sessions per message)
+  // Initialize UI with auto-greeting and proper state management
   useEffect(() => {
     let isMounted = true;
 
@@ -29,7 +31,17 @@ const LunaLiveAvatarInterface = () => {
         setIsInitialized(true);
         setIsSessionActive(true);
         await loadSuggestedQuestions();
-        setStatus('LiveAvatar ready - Luna is here!');
+        setStatus('LiveAvatar ready - Click anywhere to enable audio');
+        
+        // Auto-start with greeting after a short delay
+        setTimeout(async () => {
+          if (isMounted) {
+            // Check if this is a fresh start (no existing conversation)
+            if (conversation.length === 0) {
+              await startLiveAvatarSession('Hello! I\'m Luna, your AI assistant from One Development. How can I help you today?');
+            }
+          }
+        }, 1500); // Slightly longer delay for smooth transition
       } catch (error) {
         console.error('Error initializing LiveAvatar:', error);
         setStatus(`Error: ${error.message}`);
@@ -47,6 +59,35 @@ const LunaLiveAvatarInterface = () => {
       }
       liveAvatarService.endSession();
       isMounted = false;
+    };
+  }, []);
+
+  // Handle component unmount and cleanup
+  useEffect(() => {
+    return () => {
+      // Clean up any ongoing sessions
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
+      liveAvatarService.endSession();
+    };
+  }, []);
+
+  // Handle page refresh and component remount
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Clean up sessions before page unload
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+      }
+      liveAvatarService.endSession();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
 
@@ -89,6 +130,23 @@ const LunaLiveAvatarInterface = () => {
     scrollToBottom();
   }, [conversation]);
 
+  // Initialize audio context on user interaction
+  const initializeAudioContext = async () => {
+    if (!audioContext) {
+      try {
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        if (context.state === 'suspended') {
+          await context.resume();
+        }
+        setAudioContext(context);
+        console.log('AudioContext initialized and resumed');
+        setStatus('LiveAvatar ready - Audio enabled');
+      } catch (error) {
+        console.error('Error initializing AudioContext:', error);
+      }
+    }
+  };
+
   // Connect to LiveKit room
   const connectToLiveKit = async (url, token) => {
     try {
@@ -100,18 +158,22 @@ const LunaLiveAvatarInterface = () => {
       // Set up event listeners for track subscription
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         console.log('Track subscribed:', track.kind);
-        if (track.kind === Track.Kind.Video) {
-          // Attach video track to the video element
-          const element = track.attach();
+        if (track.kind === 'video') {
+          console.log('Attaching video track to element');
           if (videoRef.current) {
-            // Clear any existing tracks
-            videoRef.current.innerHTML = '';
-            videoRef.current.appendChild(element);
+            track.attach(videoRef.current);
+            videoRef.current.onloadedmetadata = () => {
+              console.log('Video element readyState:', videoRef.current.readyState);
+              console.log('Video element videoWidth:', videoRef.current.videoWidth);
+              console.log('Video element videoHeight:', videoRef.current.videoHeight);
+              console.log('Video element paused:', videoRef.current.paused);
+            };
           }
-        } else if (track.kind === Track.Kind.Audio) {
-          // Attach audio track for playback
-          const element = track.attach();
-          document.body.appendChild(element);
+        } else if (track.kind === 'audio') {
+          console.log('Attaching audio track to element');
+          if (audioRef.current) {
+            track.attach(audioRef.current);
+          }
         }
       });
 
@@ -138,9 +200,67 @@ const LunaLiveAvatarInterface = () => {
     }
   };
 
+  // Start LiveAvatar session
+  const startLiveAvatarSession = async (message) => {
+    try {
+      // Add user message to conversation if it's not the auto-greeting
+      const isAutoGreeting = message.includes("Hello! I'm Luna, your AI assistant from One Development");
+      
+      if (!isAutoGreeting) {
+        const userMessage = { 
+          text: message, 
+          isUser: true, 
+          timestamp: new Date().toISOString() 
+        };
+        setConversation(prev => [...prev, userMessage]);
+      }
+
+      const response = await fetch('http://13.62.188.127:8000/api/liveavatar/chat-custom/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          session_id: 'luna-liveavatar-custom-session',
+          voice: 'shimmer',
+          avatar_id: '26393b8e-e944-4367-98ef-e2bc75c4b792'  // Use correct Luna avatar ID
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Add Luna's response to conversation
+      const lunaMessage = {
+        text: result.text_response,
+        isUser: false,
+        timestamp: new Date().toISOString()
+      };
+      setConversation(prev => [...prev, lunaMessage]);
+      
+      if (result.livekit_url && result.livekit_token) {
+        setLiveKitUrl(result.livekit_url);
+        await connectToLiveKit(result.livekit_url, result.livekit_token);
+      }
+    } catch (error) {
+      console.error('Error starting LiveAvatar session:', error);
+      throw error;
+    }
+  };
+
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Initialize audio context on first user interaction
+    if (!audioContext) {
+      await initializeAudioContext();
+    }
+    
     if (!message.trim() || !isSessionActive) return;
     
     try {
@@ -173,7 +293,9 @@ const LunaLiveAvatarInterface = () => {
           },
           body: JSON.stringify({
             message: userMessageText,
-            session_id: 'luna-liveavatar-custom-session'
+            session_id: 'luna-liveavatar-custom-session',
+            voice: 'shimmer',
+            avatar_id: '26393b8e-e944-4367-98ef-e2bc75c4b792'  // Use correct Luna avatar ID
           })
         });
         
@@ -205,11 +327,14 @@ const LunaLiveAvatarInterface = () => {
           await connectToLiveKit(result.livekit_url, result.livekit_token);
           setLiveKitUrl(result.livekit_url);
           setStatus('LiveAvatar streaming...');
-        } else {
-          // Play audio response if available
-          if (result.audio_base64) {
-            playAudioResponse(result.audio_base64);
-          }
+        }
+        
+        // Play OpenAI TTS audio as fallback/backup
+        if (result.audio_base64) {
+          playAudioResponse(result.audio_base64);
+        }
+        
+        if (!result.livekit_url || !result.livekit_token) {
           setStatus('Ready');
         }
         
@@ -287,7 +412,14 @@ const LunaLiveAvatarInterface = () => {
   };
 
   return (
-    <div className="luna-heygen-interface">
+    <div 
+      className="luna-heygen-interface"
+      onClick={() => {
+        if (!audioContext) {
+          initializeAudioContext();
+        }
+      }}
+    >
       <div className="interface-header">
         <h2>Luna AI Assistant - LiveAvatar</h2>
         <div className="status-indicator">
@@ -320,6 +452,13 @@ const LunaLiveAvatarInterface = () => {
                 muted={false}
               />
             )}
+            <audio
+              ref={audioRef}
+              className="luna-avatar-audio"
+              autoPlay
+              playsInline
+              muted={false}
+            />
           </div>
         </div>
 
@@ -366,7 +505,7 @@ const LunaLiveAvatarInterface = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleSubmit} className="input-area">
+          <form onSubmit={handleSubmit} className="input-area-compact">
             <input
               type="text"
               value={message}
@@ -376,7 +515,7 @@ const LunaLiveAvatarInterface = () => {
             />
             <button 
               type="submit" 
-              className="send-button"
+              className="send-button-compact"
               disabled={!isSessionActive || !message.trim()}
             >
               <span>Send</span>
@@ -385,7 +524,7 @@ const LunaLiveAvatarInterface = () => {
               <button 
                 type="button" 
                 onClick={handleEndSession}
-                className="end-session-btn"
+                className="end-session-btn-compact"
               >
                 End Session
               </button>

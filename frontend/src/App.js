@@ -7,6 +7,7 @@ function App() {
   // Set default to true to always show the LiveAvatar interface
   const [isInitialized, setIsInitialized] = useState(false);
   const [showLiveAvatar, setShowLiveAvatar] = useState(true); // Toggle state
+  const [interfaceKey, setInterfaceKey] = useState(0); // Force remount on toggle
 
   useEffect(() => {
     // Add any global initialization here if needed
@@ -17,6 +18,12 @@ function App() {
       // Add any cleanup code here if needed
     };
   }, []);
+
+  // Handle interface toggle with cleanup
+  const handleToggle = () => {
+    setInterfaceKey(prev => prev + 1); // Force remount
+    setShowLiveAvatar(!showLiveAvatar);
+  };
 
   if (!isInitialized) {
     return (
@@ -29,27 +36,21 @@ function App() {
 
   return (
     <div className="App">
-      {/* Toggle Button */}
+      {/* Single Toggle Button */}
       <div className="interface-toggle">
         <button
-          className={`toggle-btn ${showLiveAvatar ? 'active' : ''}`}
-          onClick={() => setShowLiveAvatar(true)}
+          className="toggle-btn"
+          onClick={handleToggle}
         >
-          🎭 LiveAvatar
-        </button>
-        <button
-          className={`toggle-btn ${!showLiveAvatar ? 'active' : ''}`}
-          onClick={() => setShowLiveAvatar(false)}
-        >
-          💬 Chat Only
+          {showLiveAvatar ? '💬' : '🎭'}
         </button>
       </div>
 
       {/* Render the selected interface */}
       {showLiveAvatar ? (
-        <LunaLiveAvatarInterface />
+        <LunaLiveAvatarInterface key={`avatar-${interfaceKey}`} />
       ) : (
-        <ChatInterfaceWithSidebar />
+        <ChatInterfaceWithSidebar key={`chat-${interfaceKey}`} />
       )}
     </div>
   );

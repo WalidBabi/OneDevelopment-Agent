@@ -1670,13 +1670,16 @@ def liveavatar_chat_with_custom_mode(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # Step 1: Get text response from LLM (deepagents)
-        logger.info(f"Processing message through LLM for Custom Mode: {message[:50]}...")
+        # Step 1: Process message through LLM
+        logger.info(f"Processing message: {message}")
         
         # Get or create conversation
         conversation, created = Conversation.objects.get_or_create(
             session_id=session_id,
-            defaults={'metadata': {'agent_type': 'deepagent', 'liveavatar_mode': 'custom'}}
+            defaults={
+                'metadata': {'first_message': message[:50] + '...' if len(message) > 50 else message},
+                'created_at': timezone.now()
+            }
         )
         
         # Save user message
@@ -1708,7 +1711,7 @@ def liveavatar_chat_with_custom_mode(request):
         
         logger.info(f"LLM response received: {text_response[:50]}...")
         
-        # Step 2: Convert text to audio using TTS
+        # Step 2: Convert text to audio using OpenAI TTS
         logger.info(f"Converting text to audio with voice: {voice}")
         
         # Use existing TTS endpoint logic
@@ -1733,19 +1736,25 @@ def liveavatar_chat_with_custom_mode(request):
         audio_bytes = tts_response.content
         logger.info(f"TTS audio generated: {len(audio_bytes)} bytes")
         
-        # Step 3: Create LiveAvatar Custom Mode session
+        # Step 3: Create LiveAvatar Custom Mode session (LiveAvatar handles TTS internally)
+        logger.info(f"Creating LiveAvatar session with customer support voice")
         liveavatar_api_key = os.getenv('LIVEAVATAR_API_KEY')
+        liveavatar_base_url = os.getenv('LIVEAVATAR_API_URL', 'https://api.liveavatar.com')
+        
         if not liveavatar_api_key:
             return Response({
                 'error': 'LIVEAVATAR_API_KEY not configured'
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         
-        liveavatar_base_url = os.getenv('LIVEAVATAR_API_URL', 'https://api.liveavatar.com')
-        
         # Create session token for Custom Mode using LiveAvatar API
         token_payload = {
-            'avatar_id': avatar_id,
-            'mode': 'CUSTOM',
+            'avatar_id': '26393b8e-e944-4367-98ef-e2bc75c4b792',  # Correct Luna avatar ID from env
+            'mode': 'FULL',  # Use FULL mode to get LiveKit info from LiveAvatar
+            'avatar_persona': {
+                'voice_id': '4f3b1e99-b580-4f05-9b67-a5f585be0232',  # Luna's voice ID
+                'context_id': '16813a91-60d3-4db8-ac89-fbee6c46a989',  # Default context required by LiveAvatar
+                'language': 'en'
+            }
         }
         
         # Add custom LiveKit room if provided
@@ -1758,42 +1767,46 @@ def liveavatar_chat_with_custom_mode(request):
             'Content-Type': 'application/json'
         }
         
-        logger.info(f"Creating LiveAvatar Custom Mode session with avatar_id: {avatar_id}")
-        
-        # LiveAvatar API uses /v1/sessions/token (singular) for creating session tokens
         token_response = requests.post(
             f'{liveavatar_base_url}/v1/sessions/token',
-            json=token_payload,
             headers=token_headers,
+            json=token_payload,
             timeout=30
         )
         
         if not token_response.ok:
-            logger.error(f"LiveAvatar session token error: {token_response.status_code} - {token_response.text}")
             return Response({
                 'error': f'LiveAvatar session creation failed: {token_response.status_code}',
                 'details': token_response.text
             }, status=status.HTTP_502_BAD_GATEWAY)
         
         token_data = token_response.json()
-        session_token = token_data.get('session_token')
-        liveavatar_session_id = token_data.get('session_id')
+        # The actual data is nested under 'data' key
+        data = token_data.get('data', {})
+        session_token = data.get('session_token')
+        liveavatar_session_id = data.get('session_id')
         
-        logger.info(f"LiveAvatar session token response: {token_data}")
-        logger.info(f"Session token: {session_token}")
-        logger.info(f"Session ID: {liveavatar_session_id}")
+        if not session_token:
+            logger.error("Session token is None - token creation failed")
+            return Response({
+                'error': 'Failed to create session token',
+                'details': 'No session token in response'
+            }, status=status.HTTP_502_BAD_GATEWAY)
         
-        # Start the session
+        # Start the session with our OpenAI text
         start_headers = {
             'Authorization': f'Bearer {session_token}',
             'Content-Type': 'application/json'
         }
         
-        logger.info(f"Starting session with headers: {start_headers}")
+        start_payload = {
+            'text': text_response  # Send our OpenAI-generated text
+        }
         
         start_response = requests.post(
             f'{liveavatar_base_url}/v1/sessions/start',
             headers=start_headers,
+            json=start_payload,
             timeout=30
         )
         
@@ -1801,45 +1814,45 @@ def liveavatar_chat_with_custom_mode(request):
         livekit_token = None
         if start_response.ok:
             start_data = start_response.json()
-            livekit_url = start_data.get('livekit_url')
-            livekit_token = start_data.get('livekit_token')
+            # The actual data is nested under 'data' key
+            start_response_data = start_data.get('data', {})
+            livekit_url = start_response_data.get('livekit_url')
+            livekit_token = start_response_data.get('livekit_client_token')
             logger.info(f"LiveAvatar Custom Mode session started: {liveavatar_session_id}")
+            
+            # Step 4: Send OpenAI TTS audio to LiveAvatar Custom Mode session
+            logger.info(f"Sending OpenAI TTS audio to LiveAvatar session")
+            
+            # Encode audio as base64 for LiveAvatar
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            
+            audio_payload = {
+                'audio_data': audio_base64,
+                'session_token': session_token,
+                'format': 'mp3'
+            }
+            
+            audio_response = requests.post(
+                f'{liveavatar_base_url}/v1/sessions/{liveavatar_session_id}/audio',
+                headers=start_headers,
+                json=audio_payload,
+                timeout=30
+            )
+            
+            if audio_response.ok:
+                logger.info(f"OpenAI TTS audio sent successfully to LiveAvatar")
+            else:
+                logger.error(f"Failed to send audio to LiveAvatar: {audio_response.status_code} - {audio_response.text}")
+                
         else:
             # Log error but continue returning Luna's response without streaming info
             logger.error(f"LiveAvatar start session error: {start_response.status_code} - {start_response.text}")
         
-        # Save AI response
-        ai_message = Message.objects.create(
-            conversation=conversation,
-            message_type='ai',
-            content=text_response,
-            metadata={
-                'liveavatar_mode': 'custom',
-                'liveavatar_session_id': liveavatar_session_id,
-                'tts_voice': openai_voice
-            }
-        )
-        
-        # Encode audio as base64 for frontend
+        # Encode audio as base64 for frontend fallback
         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-        
-        # Optionally save audio to temp file and return URL
-        import tempfile
-        import os as os_module
-        temp_dir = os_module.path.join(os_module.path.dirname(os_module.path.dirname(__file__)), 'temp_audio')
-        os_module.makedirs(temp_dir, exist_ok=True)
-        
-        audio_filename = f"liveavatar_{liveavatar_session_id}_{uuid.uuid4().hex[:8]}.mp3"
-        audio_path = os_module.path.join(temp_dir, audio_filename)
-        
-        with open(audio_path, 'wb') as f:
-            f.write(audio_bytes)
-        
-        audio_url = f"/api/avatar/audio/{audio_filename.replace('.mp3', '')}.mp3"
         
         return Response({
             'text_response': text_response,
-            'audio_url': audio_url,
             'audio_base64': audio_base64,
             'audio_size': len(audio_bytes),
             'session_id': liveavatar_session_id,
@@ -1856,4 +1869,3 @@ def liveavatar_chat_with_custom_mode(request):
         return Response({
             'error': f'Internal error: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
