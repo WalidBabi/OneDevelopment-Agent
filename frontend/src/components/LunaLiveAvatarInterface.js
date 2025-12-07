@@ -31,6 +31,50 @@ const LunaLiveAvatarInterface = () => {
   const isSpeakingRef = useRef(false); // Track if avatar has started speaking
   const audioSentRef = useRef(false); // Track if audio was successfully sent
   const expectedDurationRef = useRef(0); // Store expected audio duration
+  const audioWorkerRef = useRef(null); // Web Worker for audio processing
+  const streamingResponseRef = useRef(''); // Accumulate streaming response
+
+  // Initialize Web Worker for audio processing
+  useEffect(() => {
+    // Create Web Worker for audio processing
+    if (typeof Worker !== 'undefined') {
+      try {
+        audioWorkerRef.current = new Worker('/audioWorker.js');
+        audioWorkerRef.current.onmessage = (e) => {
+          const { type, pcmBase64, duration, error, message } = e.data;
+          if (type === 'audioProcessed') {
+            console.log('✅ Audio processed in Web Worker:', { duration, size: e.data.size });
+            // Use processed PCM audio if pending
+            if (pendingAudioRef.current && pcmBase64) {
+              pendingAudioRef.current.pcmBase64 = pcmBase64;
+              pendingAudioRef.current.duration = duration;
+              // Push audio with processed PCM
+              pushAudioToLiveAvatar(
+                pendingAudioRef.current.audioBase64,
+                pendingAudioRef.current.wsUrl,
+                pendingAudioRef.current.sessionId,
+                pendingAudioRef.current.sessionToken,
+                pcmBase64,
+                duration
+              );
+            }
+          } else if (type === 'error') {
+            console.warn('⚠️ Web Worker error:', message);
+          }
+        };
+        console.log('✅ Web Worker initialized for audio processing');
+      } catch (error) {
+        console.warn('⚠️ Web Worker not available:', error);
+      }
+    }
+
+    return () => {
+      if (audioWorkerRef.current) {
+        audioWorkerRef.current.terminate();
+        audioWorkerRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize UI with auto-greeting and proper state management
   useEffect(() => {
@@ -296,7 +340,7 @@ const LunaLiveAvatarInterface = () => {
   };
 
   // Helper to push audio to LiveAvatar via WebSocket for LipSync
-  const pushAudioToLiveAvatar = async (audioBase64, wsUrl, sessionId, sessionToken) => {
+  const pushAudioToLiveAvatar = async (audioBase64, wsUrl, sessionId, sessionToken, audioPcmBase64 = null, audioDuration = null) => {
     if (!sessionToken) {
       console.error('❌ Missing sessionToken for WebSocket connection');
       return;
@@ -340,66 +384,76 @@ const LunaLiveAvatarInterface = () => {
       console.log('   (This is the LiveKit room name)');
       console.log('   Has Token:', !!sessionToken);
       
-      // Convert Base64 audio to ArrayBuffer
-      console.log('🔌 [2/5] Decoding audio data...');
-      const audioData = atob(audioBase64);
-      const audioArray = new Uint8Array(audioData.length);
-      for (let i = 0; i < audioData.length; i++) {
-        audioArray[i] = audioData.charCodeAt(i);
+      let pcmBase64;
+      let finalAudioDuration = audioDuration; // Use provided duration if available
+      
+      // OPTIMIZATION: Use pre-processed PCM if available (saves 0.5-1.5s)
+      if (audioPcmBase64) {
+        console.log('⚡ Using pre-processed PCM from backend (skipping frontend processing)');
+        console.log('   This saves ~0.5-1.5s of processing time!');
+        pcmBase64 = audioPcmBase64;
+        console.log('   Base64 PCM size:', pcmBase64.length, 'characters');
+        if (finalAudioDuration) {
+          console.log(`   Audio duration: ${finalAudioDuration.toFixed(2)}s`);
+        }
+      } else {
+        // Fallback: Process audio on frontend (original method)
+        console.log('🔌 [2/5] Decoding audio data...');
+        const audioData = atob(audioBase64);
+        const audioArray = new Uint8Array(audioData.length);
+        for (let i = 0; i < audioData.length; i++) {
+          audioArray[i] = audioData.charCodeAt(i);
+        }
+        console.log('   Audio data size:', audioArray.length, 'bytes');
+        
+        // Decode audio (WAV or MP3) to AudioBuffer
+        console.log('🔌 [3/5] Converting audio to PCM 24kHz...');
+        const targetSampleRate = 24000;
+        const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+        const decodedBuffer = await tempContext.decodeAudioData(audioArray.buffer);
+        const processedAudioDuration = decodedBuffer.duration; // Capture duration for WebSocket timeout
+        console.log('   Original sample rate:', decodedBuffer.sampleRate);
+        console.log('   Original duration:', processedAudioDuration.toFixed(2), 'seconds');
+        
+        // Resample to 24kHz using OfflineAudioContext
+        const offlineCtx = new OfflineAudioContext(1, decodedBuffer.duration * targetSampleRate, targetSampleRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = decodedBuffer;
+        source.connect(offlineCtx.destination);
+        source.start();
+        const resampledBuffer = await offlineCtx.startRendering();
+        console.log('   Resampled to 24kHz, duration:', resampledBuffer.duration.toFixed(2), 'seconds');
+        
+        // Convert to PCM 16-bit
+        const pcmBuffer = audioBufferToPCM(resampledBuffer);
+        console.log('   PCM buffer size:', pcmBuffer.byteLength, 'bytes');
+        
+        // Encode PCM to Base64 for WebSocket transmission
+        const pcmBytes = new Uint8Array(pcmBuffer);
+        
+        // Use FileReader API for reliable base64 encoding of large arrays
+        pcmBase64 = await new Promise((resolve, reject) => {
+          const blob = new Blob([pcmBytes], { type: 'application/octet-stream' });
+          const reader = new FileReader();
+          
+          reader.onload = () => {
+            const dataUrl = reader.result;
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+          };
+          
+          reader.onerror = () => {
+            reject(new Error('Failed to encode PCM to base64'));
+          };
+          
+          reader.readAsDataURL(blob);
+        });
+        
+        console.log('   Base64 PCM size:', pcmBase64.length, 'characters');
+        finalAudioDuration = processedAudioDuration; // Store duration from processing
       }
-      console.log('   Audio data size:', audioArray.length, 'bytes');
       
-      // Decode audio (WAV or MP3) to AudioBuffer
-      console.log('🔌 [3/5] Converting audio to PCM 24kHz...');
-      const targetSampleRate = 24000;
-      const tempContext = new (window.AudioContext || window.webkitAudioContext)();
-      const decodedBuffer = await tempContext.decodeAudioData(audioArray.buffer);
-      const audioDuration = decodedBuffer.duration; // Capture duration for WebSocket timeout
-      console.log('   Original sample rate:', decodedBuffer.sampleRate);
-      console.log('   Original duration:', audioDuration.toFixed(2), 'seconds');
-      
-      // Resample to 24kHz using OfflineAudioContext
-      const offlineCtx = new OfflineAudioContext(1, decodedBuffer.duration * targetSampleRate, targetSampleRate);
-      const source = offlineCtx.createBufferSource();
-      source.buffer = decodedBuffer;
-      source.connect(offlineCtx.destination);
-      source.start();
-      const resampledBuffer = await offlineCtx.startRendering();
-      console.log('   Resampled to 24kHz, duration:', resampledBuffer.duration.toFixed(2), 'seconds');
-      
-      // Convert to PCM 16-bit
-      const pcmBuffer = audioBufferToPCM(resampledBuffer);
-      console.log('   PCM buffer size:', pcmBuffer.byteLength, 'bytes');
-      
-      // Encode PCM to Base64 for WebSocket transmission
-      // According to LiveAvatar docs: audio must be PCM 16-bit 24kHz, Base64 encoded
-      // Must be sent in chunks under 1MB to avoid connection closure
-      const pcmBytes = new Uint8Array(pcmBuffer);
-      
-      // Use FileReader API for reliable base64 encoding of large arrays
-      // This avoids stack overflow and ensures valid base64
-      const pcmBase64 = await new Promise((resolve, reject) => {
-        const blob = new Blob([pcmBytes], { type: 'application/octet-stream' });
-        const reader = new FileReader();
-        
-        reader.onload = () => {
-          // FileReader gives us data URL like "data:application/octet-stream;base64,..."
-          // Extract just the base64 part
-          const dataUrl = reader.result;
-          const base64 = dataUrl.split(',')[1];
-          resolve(base64);
-        };
-        
-        reader.onerror = () => {
-          reject(new Error('Failed to encode PCM to base64'));
-        };
-        
-        reader.readAsDataURL(blob);
-      });
-      
-      console.log('   Base64 PCM size:', pcmBase64.length, 'characters');
-      
-      // Connect WebSocket for sending audio in chunks
+      // OPTIMIZATION: Open WebSocket connection early (parallel with audio processing if needed)
       console.log('🔌 [4/5] Opening WebSocket connection...');
       
       // Close any existing WebSocket connection
@@ -415,7 +469,13 @@ const LunaLiveAvatarInterface = () => {
       isSpeakingRef.current = false; // Reset speaking flag for new connection
       audioSentRef.current = false; // Reset audio sent flag
       expectedDurationRef.current = 0; // Reset expected duration
+      
+      // Open WebSocket connection immediately (don't wait for audio processing)
+      // This allows connection to establish in parallel with any remaining processing
       const ws = new WebSocket(targetUrl);
+      
+      // Store WebSocket reference immediately for potential early use
+      wsRef.current = ws;
       
       ws.onopen = () => {
         console.log('✅ [5/5] LiveAvatar WebSocket CONNECTED!');
@@ -532,7 +592,7 @@ const LunaLiveAvatarInterface = () => {
         wsRef.current = ws;
         
         // Track expected duration
-        const expectedDuration = Math.max(10, audioDuration + 5);
+        const expectedDuration = Math.max(10, (finalAudioDuration || 10) + 5);
         expectedDurationRef.current = expectedDuration * 1000; // Store in milliseconds
         console.log(`   ⏱️ Expected response duration: ${expectedDuration.toFixed(1)}s`);
         console.log('   🔄 WebSocket will stay open until avatar finishes speaking');
@@ -870,13 +930,26 @@ const LunaLiveAvatarInterface = () => {
       const userMessageText = message;
       setMessage('');
       
-      // Process the message using LiveAvatar Custom Mode pipeline
-      console.log('Processing user message (Custom Mode):', userMessageText);
+      // Process the message using LiveAvatar Custom Mode pipeline with streaming
+      console.log('Processing user message (Custom Mode with streaming):', userMessageText);
       setStatus('Thinking...');
       setIsProcessing(true);
+      streamingResponseRef.current = ''; // Reset streaming response
+      
+      // Create a placeholder message that will be updated as tokens arrive
+      const lunaMessageId = Date.now();
+      const initialLunaMessage = {
+        id: lunaMessageId,
+        text: '',
+        isUser: false,
+        timestamp: new Date().toISOString(),
+        isStreaming: true
+      };
+      setConversation(prev => [...prev, initialLunaMessage]);
       
       try {
-        const response = await fetch('http://13.62.188.127:8000/api/liveavatar/chat-custom/', {
+        // Use streaming endpoint
+        const response = await fetch('http://13.62.188.127:8000/api/liveavatar/chat-custom/stream/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -893,17 +966,58 @@ const LunaLiveAvatarInterface = () => {
           throw new Error(`Backend API error: ${response.status}`);
         }
         
-        const result = await response.json();
-        const lunaResponse = result.text_response;
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let result = null;
         
-        console.log('Luna response (Custom Mode):', lunaResponse);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                
+                if (data.type === 'token') {
+                  // Update streaming response
+                  streamingResponseRef.current += data.content;
+                  setConversation(prev => prev.map(msg => 
+                    msg.id === lunaMessageId 
+                      ? { ...msg, text: streamingResponseRef.current }
+                      : msg
+                  ));
+                } else if (data.type === 'done') {
+                  // Final response received
+                  result = data;
+                  streamingResponseRef.current = data.text_response || streamingResponseRef.current;
+                  setConversation(prev => prev.map(msg => 
+                    msg.id === lunaMessageId 
+                      ? { ...msg, text: streamingResponseRef.current, isStreaming: false }
+                      : msg
+                  ));
+                } else if (data.type === 'error') {
+                  throw new Error(data.content || 'Streaming error');
+                }
+              } catch (e) {
+                console.warn('Error parsing SSE data:', e, line);
+              }
+            }
+          }
+        }
         
-        const lunaMessage = {
-          text: lunaResponse,
-          isUser: false,
-          timestamp: new Date().toISOString()
-        };
-        setConversation(prev => [...prev, lunaMessage]);
+        if (!result) {
+          throw new Error('No response received from stream');
+        }
+        
+        const lunaResponse = result.text_response || streamingResponseRef.current;
+        console.log('Luna response (Streaming):', lunaResponse);
         
         // Estimate response time based on text length (rough: ~150 words per minute speaking)
         const wordCount = lunaResponse.split(/\s+/).length;
@@ -954,16 +1068,41 @@ const LunaLiveAvatarInterface = () => {
         }
         
         // Push audio to LiveAvatar for lip-sync (works whether newly connected or reusing)
-        if (result.audio_base64) {
+        if (result.audio_base64 || result.audio_pcm_base64) {
           console.log('🔌 Pushing audio to existing LiveAvatar session...');
+          
+          // Use Web Worker for audio processing if PCM not available
+          let pcmBase64 = result.audio_pcm_base64;
+          if (!pcmBase64 && result.audio_base64 && audioWorkerRef.current) {
+            console.log('⚙️ Processing audio in Web Worker...');
+            audioWorkerRef.current.postMessage({
+              type: 'processAudio',
+              data: {
+                audioBase64: result.audio_base64,
+                targetSampleRate: 24000
+              }
+            });
+            // Store audio for Web Worker callback
+            pendingAudioRef.current = {
+              audioBase64: result.audio_base64,
+              wsUrl: wsUrlRef.current || result.url || result.realtime_endpoint,
+              sessionId: sessionIdRef.current || result.session_id,
+              sessionToken: sessionTokenRef.current || result.session_token
+            };
+            // Use processed PCM when available (handled in Web Worker callback)
+            pcmBase64 = pendingAudioRef.current.pcmBase64;
+          }
+          
           setTimeout(() => {
             pushAudioToLiveAvatar(
               result.audio_base64, 
               wsUrlRef.current || result.url || result.realtime_endpoint, 
               sessionIdRef.current || result.session_id, 
-              sessionTokenRef.current || result.session_token
+              sessionTokenRef.current || result.session_token,
+              pcmBase64,  // Pre-processed PCM (from backend or Web Worker)
+              result.audio_duration     // Duration if provided
             );
-          }, isAlreadyConnected ? 100 : 500); // Shorter delay if already connected
+          }, isAlreadyConnected ? 50 : 200); // OPTIMIZATION: Reduced delays (was 100/500ms)
         } else if (!result.livekit_url) {
           // Fallback if no LiveKit
           if (result.audio_base64) {

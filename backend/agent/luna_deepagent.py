@@ -177,11 +177,43 @@ _langsmith_enabled = setup_langsmith()
 # LUNA SYSTEM PROMPT
 # ============================================================================
 
-def get_luna_system_prompt(session_id: str = "default", user_name: str = "there") -> str:
+def get_luna_system_prompt(session_id: str = "default", user_name: str = "there", avatar_mode: bool = False) -> str:
     """
     Luna's enhanced system prompt with improved thinking and decision-making.
+    
+    Args:
+        session_id: Session identifier
+        user_name: User's name
+        avatar_mode: If True, generate concise responses (100-120 words) for avatar speaking
     """
+    concise_instruction = ""
+    if avatar_mode:
+        concise_instruction = """
+## 🎤 AVATAR MODE - CONCISE RESPONSES REQUIRED
+
+**CRITICAL: You are speaking through a live avatar. Keep responses concise and natural for speech.**
+
+**Response Guidelines:**
+- **Target length: 100-120 words maximum** (approximately 20-25 seconds of natural speech)
+- Be direct and conversational - speak naturally, don't read a list
+- Focus on the most important information first
+- Use short, clear sentences
+- Avoid long lists or bullet points - summarize key points instead
+- End naturally at a complete thought
+- If the topic is complex, provide the most essential information and offer to continue if needed
+
+**Example of GOOD concise response:**
+"One Development is a boutique real estate developer in the UAE, founded by Ali Al Gebely. They focus on innovative projects that combine technology, sustainability, and smart design. Their flagship project is Laguna Residence, and they're preparing to launch a AED 2 billion development in the City of Arabia. The company is known for creating communities that enhance living experiences through innovation."
+
+**Example of BAD response (too long):**
+"One Development is a boutique real estate developer... [continues for 300+ words with detailed lists]"
+
+**Remember:** Users are listening, not reading. Keep it conversational and concise!
+
+"""
+    
     return f"""You are Luna, an AI research agent for One Development (oneuae.com).
+{concise_instruction}
 
 ## 🧠 ENHANCED THINKING PROCESS
 
@@ -477,11 +509,22 @@ class LunaDeepAgent:
         session_id: str = "default",
         conversation_history: Optional[List[Dict]] = None,
         user_name: Optional[str] = None,
+        avatar_mode: bool = False,
     ) -> Dict[str, Any]:
-        """Process query - Luna will summon subagents as needed."""
+        """
+        Process query - Luna will summon subagents as needed.
+        
+        Args:
+            query: User's question
+            session_id: Session identifier
+            conversation_history: Previous messages
+            user_name: User's name
+            avatar_mode: If True, generate concise responses (100-120 words) for avatar speaking
+        """
         # Use provided user_name or fall back to default
         current_user = user_name or self.default_user_name
-        print(f"\n🌙 Luna processing query from {current_user}: {query[:80]}...")
+        mode_indicator = "🎤 AVATAR MODE" if avatar_mode else "💬 CHAT MODE"
+        print(f"\n🌙 Luna processing query from {current_user} ({mode_indicator}): {query[:80]}...")
 
         # Initialize source tracker
         source_tracker = SourceTracker()
@@ -563,11 +606,26 @@ MANDATORY:
                 elif msg.get("type") == "ai":
                     messages.append(AIMessage(content=msg["content"]))
 
+        # Add avatar mode instructions if applicable
+        avatar_instruction = ""
+        if avatar_mode:
+            avatar_instruction = """
+🎤 AVATAR MODE - CONCISE RESPONSE REQUIRED:
+- Keep your response to 100-120 words maximum (20-25 seconds of natural speech)
+- Be direct and conversational - speak naturally, don't read a list
+- Focus on the most important information first
+- Use short, clear sentences
+- Avoid long lists or bullet points - summarize key points instead
+- End naturally at a complete thought
+- If the topic is complex, provide the most essential information
+
+"""
+        
         # Add query with forced web context if applicable
         # CRITICAL: For One Development questions, PREPEND the correct fact to the query itself
         if is_one_dev_question or is_founder_question:
             # Modify the query itself to include the correct name and instructions
-            modified_query = f"""🚨 CRITICAL INSTRUCTIONS BEFORE ANSWERING:
+            modified_query = f"""{avatar_instruction}🚨 CRITICAL INSTRUCTIONS BEFORE ANSWERING:
 
 1. One Development founder: Ali Al Gebely ✅ (VERIFIED FACT - 2024/2025)
 2. NEVER say "I don't have access" or "I don't know" - you MUST answer!
@@ -583,7 +641,15 @@ USER QUESTION:
 NOW ANSWER THE USER'S QUESTION USING THE INFORMATION ABOVE."""
             messages.append(HumanMessage(content=modified_query))
         else:
-            messages.append(HumanMessage(content=query))
+            if avatar_mode:
+                # Add avatar instruction to regular queries too
+                modified_query = f"""{avatar_instruction}USER QUESTION:
+{query}
+
+Remember: Keep your response concise (100-120 words) for natural speech."""
+                messages.append(HumanMessage(content=modified_query))
+            else:
+                messages.append(HumanMessage(content=query))
 
         # Invoke DeepAgent
         result = self.agent.invoke(
@@ -637,21 +703,122 @@ NOW ANSWER THE USER'S QUESTION USING THE INFORMATION ABOVE."""
         # Get all extracted sources
         sources = source_tracker.get_sources_json()
         
-        # If sources were found but not included in response, append them
-        if sources and "sources" not in response_content.lower() and "[^" not in response_content:
-            # Add sources section to response
-            sources_section = source_tracker.format_sources_for_response()
-            if sources_section:
-                response_content = response_content + sources_section
-                print(f"   📚 Added {len(sources)} sources to response")
-
         return {
             "response": response_content,
-            "session_id": session_id,
+            "sources": sources,
             "tools_used": tools_used,
+            "tool_results": tool_results,
             "thinking": [],
-            "sources": sources,  # Include sources in response
+            "reasoning_steps": len(tools_used),
         }
+    
+    def stream_query(
+        self,
+        query: str,
+        session_id: str = "default",
+        conversation_history: Optional[List[Dict]] = None,
+        user_name: Optional[str] = None,
+        avatar_mode: bool = False,
+    ):
+        """
+        Stream query response token by token for lower perceived latency.
+        
+        Yields:
+            Dict with 'type' and 'content':
+            - type: 'token' (each token), 'done' (complete), 'error'
+            - content: token text or full response
+        """
+        from typing import Generator
+        
+        try:
+            # Use provided user_name or fall back to default
+            current_user = user_name or self.default_user_name
+            mode_indicator = "🎤 AVATAR MODE" if avatar_mode else "💬 CHAT MODE"
+            print(f"\n🌙 Luna streaming query from {current_user} ({mode_indicator}): {query[:80]}...")
+            
+            # Build messages (same logic as process_query but simplified for streaming)
+            messages = []
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    if msg.get("type") == "human":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    elif msg.get("type") == "ai":
+                        messages.append(AIMessage(content=msg["content"]))
+            
+            # Add avatar mode instructions if applicable
+            avatar_instruction = ""
+            if avatar_mode:
+                avatar_instruction = """
+🎤 AVATAR MODE - CONCISE RESPONSE REQUIRED:
+- Keep your response to 100-120 words maximum (20-25 seconds of natural speech)
+- Be direct and conversational - speak naturally, don't read a list
+- Focus on the most important information first
+- Use short, clear sentences
+- Avoid long lists or bullet points - summarize key points instead
+- End naturally at a complete thought
+- If the topic is complex, provide the most essential information
+
+"""
+            
+            if avatar_mode:
+                modified_query = f"""{avatar_instruction}USER QUESTION:
+{query}
+
+Remember: Keep your response concise (100-120 words) for natural speech."""
+                messages.append(HumanMessage(content=modified_query))
+            else:
+                messages.append(HumanMessage(content=query))
+            
+            # Stream the agent response
+            # Use regular invoke for now (LangGraph streaming needs more work)
+            # Simulate streaming by yielding words for better UX
+            result = self.agent.invoke(
+                {"messages": messages},
+                config={
+                    "configurable": {
+                        "user_id": session_id,
+                        "namespace": f"luna:{session_id}",
+                    }
+                },
+            )
+            
+            # Extract response
+            if result.get("messages") and len(result["messages"]) > 0:
+                last_msg = result["messages"][-1]
+                if hasattr(last_msg, "content"):
+                    full_response = last_msg.content
+                elif isinstance(last_msg, dict) and "content" in last_msg:
+                    full_response = last_msg["content"]
+                else:
+                    full_response = str(last_msg) if last_msg else "I'm sorry, I couldn't process that."
+            else:
+                full_response = "I'm sorry, I couldn't process that."
+            
+            # Ensure we have a response
+            if not full_response or not full_response.strip():
+                full_response = "I'm sorry, I couldn't process that."
+                print(f"⚠️ Empty response from agent, using fallback")
+            
+            # Simulate streaming by yielding words (for better UX)
+            # This provides immediate feedback while we work on true token streaming
+            if full_response and full_response.strip():
+                words = full_response.split()
+                for i, word in enumerate(words):
+                    # Yield word with space (except last word)
+                    token = word + (" " if i < len(words) - 1 else "")
+                    yield {"type": "token", "content": token}
+            else:
+                # Fallback: yield the full response at once
+                yield {"type": "token", "content": full_response}
+            
+            # Yield completion
+            yield {"type": "done", "content": full_response}
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error streaming query: {e}")
+            yield {"type": "error", "content": str(e)}
 
     def get_conversation_memory(self, session_id: str) -> List[Dict]:
         """Retrieve conversation memory."""

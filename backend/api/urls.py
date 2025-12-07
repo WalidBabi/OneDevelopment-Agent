@@ -37,5 +37,6 @@ urlpatterns = [
     # LiveAvatar Custom Mode endpoints
     path('liveavatar/sessions/<str:session_id>/audio/', views.liveavatar_send_audio_custom_mode, name='liveavatar-send-audio-custom'),
     path('liveavatar/chat-custom/', views.liveavatar_chat_with_custom_mode, name='liveavatar-chat-custom'),
+    path('liveavatar/chat-custom/stream/', views.liveavatar_chat_custom_stream, name='liveavatar-chat-custom-stream'),
 ]
 
