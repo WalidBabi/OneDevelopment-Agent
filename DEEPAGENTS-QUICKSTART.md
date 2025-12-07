@@ -2,6 +2,10 @@
 
 ## 🚀 Quick Deployment
 
+> **Note – DeepAgents Upgrade (v4.0.0)**  
+> Luna is now powered directly by the `deepagents` library.  
+> Make sure `deepagents` is installed (already included in `backend/requirements*.txt`) before rebuilding.
+
 ### Step 1: Rebuild Docker Containers
 
 ```bash

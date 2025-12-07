@@ -351,74 +351,55 @@ const useEnhancedSpeech = () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        // Revoke the blob URL after a delay to ensure it's fully played
-        setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
+        // Revoke the blob URL to free memory
+        URL.revokeObjectURL(audioUrl);
         onEnd?.();
       };
       
       audio.onerror = (event) => {
-        console.error('Audio playback error:', event, audio.error);
+        console.error('Audio playback error:', event);
         setIsSpeaking(false);
         setAmplitude(0);
         setMouthOpen(0);
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        // Revoke the blob URL after a delay
-        setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
+        URL.revokeObjectURL(audioUrl);
         onEnd?.();
       };
       
-      // Try to play audio - handle autoplay blocking
-      try {
-        // Resume audio context if suspended (browser autoplay policy)
-        if (audioContextRef.current?.state === 'suspended') {
-          await audioContextRef.current.resume();
-        }
-        
-        await audio.play();
-      } catch (playError) {
-        // Autoplay blocked - this happens on first interaction
-        if (playError.name === 'NotAllowedError' || playError.name === 'NotSupportedError') {
-          console.log('⚠️ Autoplay blocked - trying browser TTS fallback');
-          console.error('Play error details:', playError);
-          
-          // Don't revoke URL immediately - might be needed later
-          setIsSpeaking(false);
-          
-          if (window.speechSynthesis) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.95;
-            utterance.pitch = 1.0;
-            utterance.onend = () => {
-              setIsSpeaking(false);
-              setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
-              onEnd?.();
-            };
-            utterance.onerror = () => {
-              setIsSpeaking(false);
-              setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
-              onEnd?.();
-            };
-            utterance.onstart = () => setIsSpeaking(true);
-            window.speechSynthesis.speak(utterance);
-          } else {
-            setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
-            onEnd?.();
-          }
-        } else {
-          console.error('Unexpected play error:', playError);
-          setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
-          throw playError;
-        }
+      // Resume audio context if suspended (browser autoplay policy)
+      if (audioContextRef.current?.state === 'suspended') {
+        await audioContextRef.current.resume();
       }
+      
+      await audio.play();
       
     } catch (error) {
       console.error('TTS error:', error);
       setIsSpeaking(false);
       setAmplitude(0);
       setMouthOpen(0);
-      onEnd?.();
+      
+      // Fallback to browser speech synthesis if OpenAI fails
+      console.log('⚠️ Falling back to browser speech synthesis');
+      if (window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          onEnd?.();
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          onEnd?.();
+        };
+        utterance.onstart = () => setIsSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        onEnd?.();
+      }
     }
   }, [animateLipSync]);
 
@@ -456,7 +437,7 @@ const useEnhancedSpeech = () => {
 };
 
 // Speech Recognition Hook with Audio Waveform and Auto-Send
-const useSpeechRecognition = (onAutoSend, onInterrupt) => {
+const useSpeechRecognition = (onAutoSend) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -530,8 +511,6 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
       const timeDataArray = new Uint8Array(bufferLength);
       const freqDataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
 
-      let debugCounter = 0;
-      
       const updateWaveform = () => {
         if (!analyserRef.current || !audioContextRef.current) return;
         
@@ -542,31 +521,27 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
         
         // Calculate RMS level from time domain (more accurate for speech)
         let sum = 0;
-        let min = 255, max = 0;
         for (let i = 0; i < bufferLength; i++) {
           const value = (timeDataArray[i] - 128) / 128; // Normalize to -1 to 1
           sum += value * value;
-          if (timeDataArray[i] < min) min = timeDataArray[i];
-          if (timeDataArray[i] > max) max = timeDataArray[i];
         }
         const rms = Math.sqrt(sum / bufferLength);
-        const normalizedLevel = Math.min(rms * 8, 1); // Moderate amplification for natural response
+        const normalizedLevel = Math.min(rms * 3, 1); // Amplify RMS
         setAudioLevel(normalizedLevel);
         
         // Create waveform from time domain data - sample 32 points
         const waveform = [];
         const step = Math.floor(bufferLength / 32);
         for (let i = 0; i < 32; i++) {
+          // Convert from 0-255 to 0-1 range, centered at 0.5
           const raw = timeDataArray[i * step];
           const value = Math.abs(raw - 128) / 128; // Distance from center
-          // Moderate amplification - responds to speech but not tiny noises
-          waveform.push(Math.min(value * 8, 1));
+          waveform.push(value);
         }
         setWaveformData(waveform);
 
-        // Check for speech activity - only trigger on actual speech
-        const signalRange = max - min;
-        if (normalizedLevel > 0.05 && signalRange > 5) {
+        // Check for speech activity
+        if (normalizedLevel > 0.02) {
           lastSpeechTimeRef.current = Date.now();
           hasSpokenRef.current = true;
         }
@@ -576,8 +551,6 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
 
       updateWaveform();
       console.log('🎤 Audio analyzer started successfully!');
-      console.log('🎤 Audio context state:', audioContextRef.current.state);
-      console.log('🎤 Sample rate:', audioContextRef.current.sampleRate);
     } catch (e) {
       console.error('❌ Failed to start audio analyzer:', e);
     }
@@ -660,12 +633,6 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
           }
         }
         
-        // INTERRUPT: If user starts speaking, stop Luna from talking
-        // This allows users to interrupt and speak again
-        if ((interim || final) && onInterrupt) {
-          onInterrupt();
-        }
-        
         // Update last speech time when we get results
         lastSpeechTimeRef.current = Date.now();
         hasSpokenRef.current = true;
@@ -680,24 +647,16 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
       };
 
       recognitionRef.current.onend = () => {
-        console.log('Speech recognition ended');
+        console.log('Speech recognition ended, restarting...');
         // Auto-restart if still supposed to be listening
         if (recognitionRef.current && isListening) {
-          console.log('Restarting speech recognition...');
           setTimeout(() => {
             try {
-              if (recognitionRef.current && isListening) {
-                recognitionRef.current.start();
-                console.log('✅ Speech recognition restarted successfully');
-              }
+              recognitionRef.current.start();
             } catch (e) {
-              console.log('⚠️ Restart failed:', e);
-              // If restart fails, reset the state to allow auto-restart logic to kick in
-              setIsListening(false);
+              console.log('Restart failed:', e);
             }
           }, 100);
-        } else {
-          console.log('Not restarting - isListening:', isListening);
         }
       };
       
@@ -709,13 +668,8 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
           setIsListening(false);
           stopAudioAnalyzer();
         } else if (event.error === 'no-speech') {
-          // No speech detected, need to restart
-          console.log('No speech detected, will restart...');
-          // Don't set isListening to false immediately - let onend handle it
-          // This prevents the "no-speech" error from permanently stopping recognition
-        } else if (event.error === 'aborted') {
-          // Aborted is expected when we manually stop, don't log as error
-          console.log('Speech recognition aborted (expected)');
+          // No speech detected, keep listening
+          console.log('No speech detected, continuing...');
         }
       };
 
@@ -734,29 +688,13 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
         } catch (e) {}
       }
     };
-  }, [isSupported, stopAudioAnalyzer, isListening, onInterrupt]);
+  }, [isSupported, stopAudioAnalyzer, isListening]);
 
   const startListening = useCallback(async () => {
     if (!recognitionRef.current) {
       console.error('Speech recognition not initialized');
       setError('not_initialized');
       return false;
-    }
-    
-    // If already listening, don't start again
-    if (isListening) {
-      console.log('Already listening, skipping start');
-      return true;
-    }
-    
-    // Resume any suspended audio contexts (unlock autoplay)
-    if (audioContextRef.current?.state === 'suspended') {
-      try {
-        await audioContextRef.current.resume();
-        console.log('🔊 Audio context unlocked');
-      } catch (e) {
-        console.error('Failed to resume audio context:', e);
-      }
     }
     
     // Reset state
@@ -772,24 +710,16 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
     await startAudioAnalyzer();
     
     try {
-      // Clean abort - don't log errors for expected behavior
       try { recognitionRef.current.abort(); } catch (e) {}
       
       setTimeout(() => {
         try {
-          if (recognitionRef.current) {
-            recognitionRef.current.start();
-            console.log('🎤 Speech recognition started');
-          }
+          recognitionRef.current.start();
+          console.log('🎤 Speech recognition started');
         } catch (e) {
-          // Check if it's the "already started" error
-          if (e.name === 'InvalidStateError') {
-            console.log('Recognition already started');
-          } else {
-            console.error('Failed to start recognition:', e);
-            setIsListening(false);
-            setError('start_failed');
-          }
+          console.error('Failed to start recognition:', e);
+          setIsListening(false);
+          setError('start_failed');
         }
       }, 100);
       
@@ -800,7 +730,7 @@ const useSpeechRecognition = (onAutoSend, onInterrupt) => {
       setError('start_failed');
       return false;
     }
-  }, [startAudioAnalyzer, isListening]);
+  }, [startAudioAnalyzer]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -1082,6 +1012,73 @@ const SuggestionCard = ({ icon, text, onClick, delay }) => (
   </button>
 );
 
+// Sources Display Component - Copilot Style
+const SourcesList = ({ sources }) => {
+  if (!sources || sources.length === 0) return null;
+
+  // Group sources by type
+  const groupedSources = sources.reduce((acc, source) => {
+    const type = source.type || 'general_web';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(source);
+    return acc;
+  }, {});
+
+  const typeLabels = {
+    'official': '🏢 Official Sources',
+    'internal': '📚 Knowledge Base',
+    'market_data': '📊 Market Data & News',
+    'general_web': '🌐 References'
+  };
+
+  const typeOrder = ['official', 'internal', 'market_data', 'general_web'];
+
+  return (
+    <div className="sources-container">
+      <div className="sources-header">
+        <span className="sources-icon">📚</span>
+        <span className="sources-title">Sources</span>
+        <span className="sources-count">{sources.length}</span>
+      </div>
+      
+      <div className="sources-list">
+        {typeOrder.map(type => {
+          const typeSources = groupedSources[type];
+          if (!typeSources || typeSources.length === 0) return null;
+          
+          return (
+            <div key={type} className="source-group">
+              <div className="source-group-label">{typeLabels[type]}</div>
+              {typeSources.map((source, idx) => (
+                <div key={idx} className={`source-item source-${source.reliability || 'verified'}`}>
+                  <div className="source-number">{idx + 1}</div>
+                  <div className="source-content">
+                    <a 
+                      href={source.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="source-link"
+                    >
+                      <span className="source-title">{source.title}</span>
+                      {source.reliability === 'verified' && (
+                        <span className="source-verified" title="Verified source">✓</span>
+                      )}
+                    </a>
+                    {source.snippet && (
+                      <p className="source-snippet">{source.snippet}</p>
+                    )}
+                    <div className="source-url">{source.url}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Greeting messages that rotate (reserved for potential future onboarding UI)
 const GREETINGS = [
   "Welcome to One Development",
@@ -1090,8 +1087,97 @@ const GREETINGS = [
   "Let's find your dream property",
 ];
 
-// Luna's voice - Shimmer (expressive female)
-const LUNA_VOICE = 'shimmer';
+// Luna's voice - OpenAI TTS (nova is warm and natural)
+const LUNA_VOICE = 'nova';
+
+// Context Monitor Component
+const ContextMonitor = ({ sessionId }) => {
+  const [contextData, setContextData] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+
+  useEffect(() => {
+    const fetchContext = async () => {
+      try {
+        const data = await chatService.getContextStatus(sessionId);
+        setContextData(data);
+      } catch (error) {
+        console.error('Error fetching context:', error);
+      }
+    };
+
+    fetchContext();
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchContext, 5000);
+    return () => clearInterval(interval);
+  }, [sessionId]);
+
+  if (!contextData) return null;
+
+  const percentage = contextData.percentage_used || 0;
+  const isNearLimit = percentage > 70;
+  const isAtLimit = percentage > 85;
+
+  return (
+    <div className={`context-monitor ${showDetails ? 'expanded' : ''}`}>
+      <div className="context-header" onClick={() => setShowDetails(!showDetails)}>
+        <span className="context-icon">📊</span>
+        <span className="context-label">Context</span>
+        <span className={`context-percentage ${isAtLimit ? 'critical' : isNearLimit ? 'warning' : ''}`}>
+          {percentage.toFixed(1)}%
+        </span>
+        <span className="context-toggle">{showDetails ? '▼' : '▶'}</span>
+      </div>
+      
+      {/* Progress bar */}
+      <div className="context-bar">
+        <div 
+          className={`context-fill ${isAtLimit ? 'critical' : isNearLimit ? 'warning' : ''}`}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      </div>
+
+      {showDetails && (
+        <div className="context-details">
+          <div className="context-stat">
+            <span className="stat-label">Tokens:</span>
+            <span className="stat-value">
+              {contextData.current_tokens?.toLocaleString()} / {contextData.max_tokens?.toLocaleString()}
+            </span>
+          </div>
+          <div className="context-stat">
+            <span className="stat-label">Model:</span>
+            <span className="stat-value">{contextData.model}</span>
+          </div>
+          {contextData.breakdown && (
+            <div className="context-breakdown">
+              <div className="breakdown-item">
+                <span>💬 Messages:</span>
+                <span>{contextData.breakdown.messages?.toLocaleString()}</span>
+              </div>
+              <div className="breakdown-item">
+                <span>📝 System:</span>
+                <span>{contextData.breakdown.system_prompt?.toLocaleString()}</span>
+              </div>
+              <div className="breakdown-item">
+                <span>🛠️ Tools:</span>
+                <span>{contextData.breakdown.tools?.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+          <div className={`filesystem-status ${contextData.filesystem_active ? 'active' : 'ready'}`}>
+            <span className="filesystem-icon">💾</span>
+            <span className="filesystem-text">
+              {contextData.filesystem_active 
+                ? '🟢 FilesystemMiddleware: ACTIVE' 
+                : `⚪ FilesystemMiddleware: Ready (activates at ${contextData.filesystem_threshold}%)`
+              }
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Main Component - Full Voice + Avatar Experience
 const LunaFreeInterface = () => {
@@ -1104,6 +1190,7 @@ const LunaFreeInterface = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [latestResponse, setLatestResponse] = useState('');
+  const [showContextMonitor, setShowContextMonitor] = useState(true);
   
   const speech = useEnhancedSpeech();
   const recognition = useSpeechRecognition();
@@ -1174,13 +1261,17 @@ const LunaFreeInterface = () => {
     try {
       const response = await chatService.sendMessage(messageText, sessionId);
       const responseText = response.response;
+      const sources = response.sources || [];
 
-      // Add Luna's response
+      console.log('📚 Received sources:', sources);
+
+      // Add Luna's response with sources
       const lunaMsg = {
         id: uuidv4(),
         type: 'assistant',
         content: responseText,
         timestamp: new Date(),
+        sources: sources,  // Attach sources to message
       };
       setMessages(prev => [...prev, lunaMsg]);
       setLatestResponse(responseText);
@@ -1258,6 +1349,13 @@ const LunaFreeInterface = () => {
         <img src="/onedev-logo.svg" alt="One Development" className="company-logo" />
         <div className="top-bar-actions">
           <button 
+            className={`action-btn ${showContextMonitor ? 'on' : ''}`}
+            onClick={() => setShowContextMonitor(!showContextMonitor)}
+            title="Context Monitor"
+          >
+            📊
+          </button>
+          <button 
             className={`action-btn ${showHistory ? 'on' : ''}`}
             onClick={() => setShowHistory(!showHistory)}
           >
@@ -1271,6 +1369,11 @@ const LunaFreeInterface = () => {
           </button>
         </div>
       </header>
+
+      {/* Context Monitor */}
+      {showContextMonitor && sessionId && (
+        <ContextMonitor sessionId={sessionId} />
+      )}
 
       {/* Main Area */}
       <main className="luna-content">
@@ -1438,7 +1541,12 @@ const LunaFreeInterface = () => {
                   <span className="msg-icon">{msg.type === 'user' ? '👤' : '🌙'}</span>
                   <div className="msg-text">
                     {msg.type === 'assistant' ? (
+                      <>
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        {msg.sources && msg.sources.length > 0 && (
+                          <SourcesList sources={msg.sources} />
+                        )}
+                      </>
                     ) : (
                       msg.content
                     )}
@@ -1481,7 +1589,6 @@ const LunaAvatarInterface = () => {
   const progressIntervalRef = useRef(null);
   const autoRestartTimeoutRef = useRef(null);
   const sendMessageRef = useRef(null);
-  const abortControllerRef = useRef(null); // For cancelling backend requests
 
   const speech = useEnhancedSpeech();
   
@@ -1497,45 +1604,7 @@ const LunaAvatarInterface = () => {
     }
   }, [isProcessing]);
 
-  // Interrupt callback - stop Luna when user starts speaking
-  const handleInterrupt = useCallback(() => {
-    console.log('🛑 User speaking - interrupting Luna...');
-    
-    // Abort any ongoing backend requests (chat, avatar generation, etc.)
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      console.log('🚫 Aborted backend request');
-    }
-    
-    // Stop TTS audio if playing
-    if (speech.isSpeaking) {
-      speech.stop();
-      console.log('🔇 Stopped TTS audio');
-    }
-    
-    // Stop video if playing
-    if (isVideoPlaying && currentVideoUrl) {
-      setIsVideoPlaying(false);
-      setCurrentVideoUrl(null);
-      console.log('📹 Stopped video playback');
-    }
-    
-    // Stop video generation if in progress
-    if (isGeneratingVideo) {
-      setIsGeneratingVideo(false);
-      setVideoProgress(0);
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-      console.log('⏹️ Stopped video generation');
-    }
-    
-    // Reset processing state to allow new input
-    setIsProcessing(false);
-  }, [speech, isVideoPlaying, currentVideoUrl, isGeneratingVideo]);
-
-  const recognition = useSpeechRecognition(handleAutoSend, handleInterrupt);
+  const recognition = useSpeechRecognition(handleAutoSend);
 
   // Request microphone permission on mount
   useEffect(() => {
@@ -1655,19 +1724,9 @@ const LunaAvatarInterface = () => {
       const text = messageText.trim();
       setIsProcessing(true);
 
-      // Create AbortController for this request
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
       try {
-        const response = await chatService.sendMessage(text, sessionId, abortController.signal);
+        const response = await chatService.sendMessage(text, sessionId);
         const responseText = response.response;
-
-        // Check if request was aborted (user interrupted)
-        if (abortController.signal.aborted) {
-          console.log('Request was aborted by user interrupt');
-          return;
-        }
 
         // Try to generate photorealistic avatar video if service is available
         if (avatarServiceAvailable) {
@@ -1677,11 +1736,14 @@ const LunaAvatarInterface = () => {
             // Stop any currently playing speech
             if (speech.isSpeaking) {
               window.speechSynthesis?.cancel();
+              speech.stop(); // Stop OpenAI TTS too
             }
             
             // Start progress simulation
             setIsGeneratingVideo(true);
             setVideoProgress(0);
+            
+            console.log('🎬 Starting avatar video generation (please wait, no audio until video is ready)...');
             
             // Simulate progress (since we don't have real progress from backend)
             progressIntervalRef.current = setInterval(() => {
@@ -1691,13 +1753,10 @@ const LunaAvatarInterface = () => {
               });
             }, 600); // Update every 600ms (60 seconds total to reach 95%)
             
-            const avatarResult = await chatService.generateAvatar(responseText, null, 'default', 'fast', abortController.signal);
-            
-            // Check if request was aborted during video generation
-            if (abortController.signal.aborted) {
-              console.log('Avatar generation was aborted by user interrupt');
-              return;
-            }
+            // CRITICAL: Do not play any audio until video is ready
+            // The video contains HeyGen's built-in Juniper voice, so we wait for it
+            // HeyGen generates professional 512x512 videos with excellent lip-sync
+            const avatarResult = await chatService.generateAvatar(responseText, null, 'Juniper', 'standard');
             
             // Clear progress interval
             if (progressIntervalRef.current) {
@@ -1710,18 +1769,10 @@ const LunaAvatarInterface = () => {
               setIsGeneratingVideo(false);
               setVideoProgress(0);
               // Only speak if video generation completely failed
-              speech.speak(responseText, () => {
-                // After TTS ends, restart listening
-                console.log('TTS ended, restarting listening...');
-                setTimeout(() => {
-                  if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
-                    recognition.startListening();
-                  }
-                }, 500);
-              }, LUNA_VOICE);
+              speech.speak(responseText, null, LUNA_VOICE);
             } else {
               // Got video! Play it - DO NOT SPEAK, video has audio!
-              console.log('Avatar video generated:', avatarResult.video_url);
+              console.log('✅ Avatar video ready with OpenAI voice, playing now...');
               setVideoProgress(100);
               
               // Store video URL for replay and set as current
@@ -1732,26 +1783,10 @@ const LunaAvatarInterface = () => {
                 setVideoProgress(0);
               }, 100);
               
-              // DO NOT CALL speech.speak() - video has audio!
+              // CRITICAL: DO NOT CALL speech.speak() - video has OpenAI audio!
+              // Playing the video will automatically play the audio track
             }
           } catch (avatarError) {
-            // Check if it was aborted by user interrupt
-            if (avatarError.name === 'AbortError' || avatarError.name === 'CanceledError') {
-              console.log('Avatar generation cancelled by user');
-              if (progressIntervalRef.current) {
-                clearInterval(progressIntervalRef.current);
-              }
-              setIsGeneratingVideo(false);
-              setVideoProgress(0);
-              // Don't speak - user interrupted, just restart listening
-              setTimeout(() => {
-                if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
-                  recognition.startListening();
-                }
-              }, 500);
-              return;
-            }
-            
             console.error('Avatar generation error:', avatarError);
             // Clear progress and fallback to TTS only if error
             if (progressIntervalRef.current) {
@@ -1760,55 +1795,18 @@ const LunaAvatarInterface = () => {
             setIsGeneratingVideo(false);
             setVideoProgress(0);
             // Only speak if there was an error
-            speech.speak(responseText, () => {
-              // After TTS ends, restart listening
-              console.log('TTS ended (error case), restarting listening...');
-              setTimeout(() => {
-                if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
-                  recognition.startListening();
-                }
-              }, 500);
-            }, LUNA_VOICE);
+            speech.speak(responseText, null, LUNA_VOICE);
           }
         } else {
           // Avatar service not available, use TTS
           setLastResponseText(responseText); // Save for replay
-          speech.speak(responseText, () => {
-            // After TTS ends, restart listening
-            console.log('TTS ended (fallback), restarting listening...');
-            setTimeout(() => {
-              if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
-                recognition.startListening();
-              }
-            }, 500);
-          }, LUNA_VOICE);
+          speech.speak(responseText, null, LUNA_VOICE);
         }
       } catch (err) {
-        // Check if request was aborted by user interrupt
-        if (err.name === 'AbortError' || err.name === 'CanceledError') {
-          console.log('Request cancelled by user interrupt');
-          // Just restart listening, don't speak
-          setTimeout(() => {
-            if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
-              recognition.startListening();
-            }
-          }, 500);
-          return;
-        }
-        
         console.error('Avatar interface error:', err);
-        speech.speak("I'm having trouble connecting right now. Please try again in a moment.", () => {
-          // After TTS ends, restart listening
-          console.log('TTS ended (connection error), restarting listening...');
-          setTimeout(() => {
-            if (!recognition.isListening && recognition.isSupported && micPermission === 'granted') {
-              recognition.startListening();
-            }
-          }, 500);
-        }, LUNA_VOICE);
+        speech.speak("I'm having trouble connecting right now. Please try again in a moment.", null, LUNA_VOICE);
       } finally {
         setIsProcessing(false);
-        abortControllerRef.current = null; // Clear the abort controller
       }
     },
     [isProcessing, sessionId, speech, avatarServiceAvailable, LUNA_VOICE]
@@ -1856,20 +1854,6 @@ const LunaAvatarInterface = () => {
     const text = recognition.transcript || recognition.interimTranscript;
     if (text) setInputText(text);
   }, [recognition.transcript, recognition.interimTranscript]);
-
-  // Restart listening after speech ends (TTS fallback)
-  useEffect(() => {
-    // When speech stops and we're not processing, restart listening
-    if (!speech.isSpeaking && !isProcessing && !isVideoPlaying && !isGeneratingVideo && micPermission === 'granted') {
-      const restartTimeout = setTimeout(() => {
-        if (recognition.isSupported && !recognition.isListening) {
-          console.log('Speech ended - restarting listening');
-          recognition.startListening();
-        }
-      }, 800);
-      return () => clearTimeout(restartTimeout);
-    }
-  }, [speech.isSpeaking, isProcessing, isVideoPlaying, isGeneratingVideo, micPermission, recognition]);
 
   // Auto-send when a final transcript is received
   useEffect(() => {
@@ -1948,27 +1932,13 @@ const LunaAvatarInterface = () => {
             className={`luna-avatar ${lunaState}`}
             onClick={handleAvatarClick}
           >
-            <div className="avatar-ring ring-1" style={{ opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1, transition: 'opacity 0.4s ease-in-out' }}></div>
-            <div className="avatar-ring ring-2" style={{ opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1, transition: 'opacity 0.4s ease-in-out' }}></div>
-            <div className="avatar-ring ring-3" style={{ opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1, transition: 'opacity 0.4s ease-in-out' }}></div>
+            <div className="avatar-ring ring-1"></div>
+            <div className="avatar-ring ring-2"></div>
+            <div className="avatar-ring ring-3"></div>
 
-            <div className="avatar-core" style={{ position: 'relative' }}>
-              {/* Static image - always visible as background */}
-              <img 
-                src="/Luna.png" 
-                alt="Luna" 
-                className="avatar-image" 
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  height: 'auto',
-                  opacity: currentVideoUrl ? 0 : 1,
-                  transition: 'opacity 0.4s ease-in-out'
-                }}
-              />
-              
-              {/* Video overlay - fades in smoothly over the image */}
-              {currentVideoUrl && (
+            <div className="avatar-core">
+              {/* Show video if available, otherwise static image */}
+              {currentVideoUrl ? (
                 <video
                   ref={videoRef}
                   src={currentVideoUrl}
@@ -1977,64 +1947,37 @@ const LunaAvatarInterface = () => {
                   loop={false}
                   muted={false}
                   playsInline
-                  preload="auto"
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    opacity: isVideoPlaying ? 1 : 0,
-                    transition: 'opacity 0.4s ease-in-out',
-                    zIndex: 2
-                  }}
-                  onLoadedData={() => {
-                    console.log('Video loaded and ready');
-                    setIsVideoPlaying(true);
-                  }}
                   onPlay={() => {
-                    console.log('Video playing');
+                    console.log('Video started playing');
                     setIsVideoPlaying(true);
                   }}
                   onEnded={() => {
-                    console.log('Video ended - restarting listening');
+                    console.log('Video ended');
                     setIsVideoPlaying(false);
                     setCurrentVideoUrl(null);
-                    // Restart listening after video ends
-                    setTimeout(() => {
-                      if (micPermission === 'granted' && recognition.isSupported && !recognition.isListening) {
-                        recognition.startListening();
-                      }
-                    }, 800);
                   }}
-                  onPause={() => {
-                    console.log('Video paused');
-                  }}
+                  onPause={() => setIsVideoPlaying(false)}
                   onError={(e) => {
                     console.error('Video playback error:', e);
                     setIsVideoPlaying(false);
                     setCurrentVideoUrl(null);
                   }}
                 />
+              ) : (
+                <img src="/Luna.png" alt="Luna" className="avatar-image" />
               )}
 
-              {/* Hide speech glow when video is playing */}
-              {!isVideoPlaying && !currentVideoUrl && (
-                <div
-                  className="speech-glow"
-                  style={{
-                    opacity: speech.isSpeaking ? 0.4 + speech.mouthOpen * 0.5 : 0,
-                    transform: `scale(${speech.isSpeaking ? 1 + speech.mouthOpen * 0.15 : 1})`,
-                  }}
-                ></div>
-              )}
+              {/* Mouth overlay disabled - looks unnatural with static image */}
 
-              {/* Hide avatar glow when video is playing */}
-              <div className="avatar-glow" style={{
-                opacity: (isVideoPlaying || currentVideoUrl) ? 0 : 1,
-                transition: 'opacity 0.4s ease-in-out'
-              }}></div>
+              <div
+                className="speech-glow"
+                style={{
+                  opacity: speech.isSpeaking ? 0.4 + speech.mouthOpen * 0.5 : 0,
+                  transform: `scale(${speech.isSpeaking ? 1 + speech.mouthOpen * 0.15 : 1})`,
+                }}
+              ></div>
+
+              <div className="avatar-glow"></div>
             </div>
 
             <div className="avatar-particles">
@@ -2044,53 +1987,22 @@ const LunaAvatarInterface = () => {
             </div>
           </div>
 
-          {/* Minimal Status Indicator - Waveform or Thinking */}
+          {/* Listening / speaking indicator */}
           <div className="luna-status-bar avatar-only-status">
-            {/* Waveform when listening */}
-            {recognition.isListening && (
-              <div className="voice-waveform-inline">
-                <MicrophoneWaveform 
-                  waveformData={recognition.waveformData} 
-                  isListening={recognition.isListening}
-                  audioLevel={recognition.audioLevel}
-                />
-              </div>
-            )}
-            
-            {/* Thinking animation when processing */}
-            {(isProcessing || isGeneratingVideo) && !recognition.isListening && (
-              <div className="thinking-indicator">
-                <div className="thinking-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <span className="thinking-text">
-                  {isGeneratingVideo ? `Generating response...` : 'Thinking...'}
-                </span>
-              </div>
-            )}
-            
-            {/* Speaking indicator */}
-            {(isVideoPlaying || speech.isSpeaking) && (
-              <div className="speaking-indicator">
-                <div className="speaking-waves">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            )}
-            
-            {/* Idle state - subtle ready indicator */}
-            {lunaState === 'idle' && !isProcessing && !isGeneratingVideo && (
-              <div className="idle-indicator">
-                <span className="pulse-dot"></span>
-              </div>
-            )}
+            <span className={`status-indicator ${lunaState}`}></span>
+            <span className="status-label">{statusLabel}</span>
           </div>
+
+          {/* Voice Waveform Visualization */}
+          {recognition.isListening && (
+            <div className="voice-waveform-container">
+              <MicrophoneWaveform 
+                waveformData={recognition.waveformData} 
+                isListening={recognition.isListening}
+                audioLevel={recognition.audioLevel}
+              />
+            </div>
+          )}
 
           {/* Live Transcript Display (Debug) */}
           {(recognition.transcript || recognition.interimTranscript || debugTranscript) && (

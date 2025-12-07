@@ -4,7 +4,8 @@
 # This script starts the Django backend with the ngrok tunnel URL
 
 # Set your ngrok URL here (update this when ngrok restarts)
-export AVATAR_SERVICE_URL="https://5d812f2e82fa.ngrok-free.app"
+# Current ngrok URL: https://fa8978e3c6ef.ngrok-free.app -> http://localhost:8001
+export AVATAR_SERVICE_URL="https://fa8978e3c6ef.ngrok-free.app"
 
 echo "================================================"
 echo "Starting Django Backend with Avatar Service"

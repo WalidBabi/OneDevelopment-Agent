@@ -1,29 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import ChatInterface from './components/ChatInterface';
-import { LunaAvatarInterface } from './components/LunaFreeInterface';
+import LunaLiveAvatarInterface from './components/LunaLiveAvatarInterface';
+import ChatInterfaceWithSidebar from './components/ChatInterfaceWithSidebar';
 import './App.css';
 
 function App() {
-  const [isAvatarMode, setIsAvatarMode] = useState(() => {
-    return localStorage.getItem('luna_avatar_mode') === 'true';
-  });
+  // Set default to true to always show the LiveAvatar interface
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showLiveAvatar, setShowLiveAvatar] = useState(true); // Toggle state
 
   useEffect(() => {
-    localStorage.setItem('luna_avatar_mode', isAvatarMode);
-  }, [isAvatarMode]);
+    // Add any global initialization here if needed
+    setIsInitialized(true);
+    
+    // Cleanup function
+    return () => {
+      // Add any cleanup code here if needed
+    };
+  }, []);
+
+  if (!isInitialized) {
+    return (
+      <div className="app-loading">
+        <div className="spinner"></div>
+        <p>Initializing Luna...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="App">
-      {/* Mode Toggle Button */}
-      <button 
-        className="mode-toggle"
-        onClick={() => setIsAvatarMode(!isAvatarMode)}
-        title={isAvatarMode ? "Switch to Chat Mode" : "Switch to Avatar Mode"}
-      >
-        {isAvatarMode ? '💬' : '🌙'}
-      </button>
+      {/* Toggle Button */}
+      <div className="interface-toggle">
+        <button
+          className={`toggle-btn ${showLiveAvatar ? 'active' : ''}`}
+          onClick={() => setShowLiveAvatar(true)}
+        >
+          🎭 LiveAvatar
+        </button>
+        <button
+          className={`toggle-btn ${!showLiveAvatar ? 'active' : ''}`}
+          onClick={() => setShowLiveAvatar(false)}
+        >
+          💬 Chat Only
+        </button>
+      </div>
 
-      {isAvatarMode ? <LunaAvatarInterface /> : <ChatInterface />}
+      {/* Render the selected interface */}
+      {showLiveAvatar ? (
+        <LunaLiveAvatarInterface />
+      ) : (
+        <ChatInterfaceWithSidebar />
+      )}
     </div>
   );
 }

@@ -20,34 +20,39 @@ const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
     }
   }, [thinkingText, currentAction]);
   
+  // Hide immediately if phase is done OR if no current action and not active
+  if (phase === 'done' || currentAction?.type === 'done') {
+    return null;
+  }
+  
   // Don't show anything if not active and no action
   if (!isActive && !currentAction) return null;
   
-  // Hide immediately if phase is done
-  if (phase === 'done' || currentAction?.type === 'done') {
+  // Also hide if action is null and phase is empty/done
+  if (!currentAction && (!phase || phase === '' || phase === 'done')) {
     return null;
   }
   
   // Get action display info
   const getActionDisplay = (action) => {
-    if (!action) return { label: 'PROCESSING', icon: '⚡', color: '#94a3b8' };
+    if (!action) return { label: 'PROCESSING', icon: '⚡', color: '#966bfc' }; // OneDevelopment violet
     
     const actionMap = {
-      'thinking': { label: 'THINKING', icon: '🧠', color: '#a78bfa' },
+      'thinking': { label: 'THINKING', icon: '🧠', color: '#966bfc' }, // OneDevelopment violet
       'searching_kb': { label: 'SEARCHING KNOWLEDGE BASE', icon: '🔍', color: '#60a5fa' },
       'searching_web': { label: 'SEARCHING WEB', icon: '🌐', color: '#34d399' },
       'searching_docs': { label: 'SEARCHING DOCUMENTS', icon: '📄', color: '#fbbf24' },
       'reading_pdf': { label: 'READING PDF', icon: '📑', color: '#f472b6' },
       'fetching_brochure': { label: 'FETCHING BROCHURE', icon: '📋', color: '#fb923c' },
-      'analyzing': { label: 'ANALYZING', icon: '🔬', color: '#a78bfa' },
+      'analyzing': { label: 'ANALYZING', icon: '🔬', color: '#966bfc' }, // OneDevelopment violet
       'comparing': { label: 'COMPARING', icon: '⚖️', color: '#38bdf8' },
       'market_data': { label: 'GETTING MARKET DATA', icon: '📊', color: '#4ade80' },
-      'user_context': { label: 'CHECKING USER CONTEXT', icon: '👤', color: '#c084fc' },
+      'user_context': { label: 'CHECKING USER CONTEXT', icon: '👤', color: '#966bfc' }, // OneDevelopment violet
       'searching': { label: 'SEARCHING', icon: '🔍', color: '#60a5fa' },
-      'responding': { label: 'GENERATING RESPONSE', icon: '✨', color: '#fcd34d' },
+      'responding': { label: 'GENERATING RESPONSE', icon: '✨', color: '#D4AF37' }, // OneDevelopment gold
       'tool_result': { label: 'PROCESSING RESULTS', icon: '✅', color: '#22c55e' },
-      'verifying': { label: 'VERIFYING', icon: '🔍', color: '#8b5cf6' },
-      'improving': { label: 'IMPROVING RESPONSE', icon: '✨', color: '#f59e0b' },
+      'verifying': { label: 'VERIFYING', icon: '🔍', color: '#966bfc' }, // OneDevelopment violet
+      'improving': { label: 'IMPROVING RESPONSE', icon: '✨', color: '#D4AF37' }, // OneDevelopment gold
       'done': { label: 'COMPLETE', icon: '✓', color: '#22c55e' },
       'error': { label: 'ERROR', icon: '❌', color: '#ef4444' },
     };
@@ -67,34 +72,59 @@ const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
       'get_dubai_market_context': 'market_data',
       'get_user_context': 'user_context',
       'save_user_information': 'user_context',
-      'deep_research': 'analyzing',
-      'analyze_pricing': 'analyzing',
-      'compare_properties': 'comparing',
-      'guide_buyer_journey': 'analyzing',
+      // Subagents - specialized agents
+      'deep_research': 'subagent_research',
+      'analyze_pricing': 'subagent_pricing',
+      'compare_properties': 'subagent_compare',
+      'guide_buyer_journey': 'subagent_guide',
+    };
+    
+    // Subagent-specific displays
+    const subagentMap = {
+      'subagent_research': { label: '🔬 DEEP RESEARCH SUBAGENT', icon: '🤖', color: '#966bfc' },
+      'subagent_pricing': { label: '💰 PRICING ANALYSIS SUBAGENT', icon: '🤖', color: '#966bfc' },
+      'subagent_compare': { label: '⚖️ COMPARISON SUBAGENT', icon: '🤖', color: '#966bfc' },
+      'subagent_guide': { label: '🗺️ BUYER JOURNEY SUBAGENT', icon: '🤖', color: '#966bfc' },
     };
     
     // Check if it's a tool action
     if (action.toolName) {
       const mappedType = toolMap[action.toolName] || 'analyzing';
+      
+      // Check if it's a subagent
+      if (subagentMap[mappedType]) {
+        return subagentMap[mappedType];
+      }
+      
       return actionMap[mappedType] || actionMap['analyzing'];
     }
     
-    return actionMap[action.type] || { label: action.type?.toUpperCase() || 'PROCESSING', icon: '⚡', color: '#94a3b8' };
+    // Check if action type is a subagent
+    if (subagentMap[action.type]) {
+      return subagentMap[action.type];
+    }
+    
+    return actionMap[action.type] || { label: action.type?.toUpperCase() || 'PROCESSING', icon: '⚡', color: '#966bfc' }; // OneDevelopment violet
   };
   
   // Determine what to show
   const display = getActionDisplay(currentAction);
-  const hasTokens = (phase === 'thinking' && thinkingText && thinkingText.trim().length > 0);
+  // Show thinking tokens if we have thinking text and we're in thinking phase OR if action is thinking
+  const isThinkingPhase = phase === 'thinking' || currentAction?.type === 'thinking';
+  const hasTokens = (isThinkingPhase && thinkingText && thinkingText.trim().length > 0);
   const hasQuery = currentAction?.query;
   const hasDetail = currentAction?.detail;
   const isWaiting = !hasTokens && !hasQuery && phase !== 'done';
+  
+  // Check if this is a subagent action
+  const isSubagent = display.label && display.label.includes('SUBAGENT');
   
   // Parse thinking text into lines
   const lines = thinkingText ? thinkingText.split('\n').filter(line => line.trim()) : [];
   const visibleLines = expanded ? lines : lines.slice(-4);
   
   return (
-    <div className="action-display" style={{ '--action-color': display.color }}>
+    <div className={`action-display ${isSubagent ? 'subagent-action' : ''}`} style={{ '--action-color': display.color }}>
       {/* Action Header */}
       <div className="action-header" onClick={() => setExpanded(!expanded)}>
         <div className="action-header-left">
@@ -133,7 +163,7 @@ const ActionDisplay = ({ currentAction, thinkingText, phase, isActive }) => {
   );
 };
 
-// Cursor-Style Thinking Summary - Shows after completion
+// Cursor-Style Thinking Summary - Shows after completion with Subagent info
 const ThinkingSummary = ({ message }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -149,27 +179,35 @@ const ThinkingSummary = ({ message }) => {
   
   if (toolCalls.length === 0) return null;
   
-  // Get friendly tool names
-  const getToolDisplay = (toolName) => {
+  // Identify subagents vs regular tools
+  const subagentTools = ['deep_research', 'analyze_pricing', 'compare_properties', 'guide_buyer_journey'];
+  const subagentCalls = toolCalls.filter(step => subagentTools.includes(step.tool));
+  const regularToolCalls = toolCalls.filter(step => !subagentTools.includes(step.tool));
+  
+  // Get friendly tool names with subagent icons
+  const getToolDisplay = (toolName, isSubagent = false) => {
     const toolDisplayMap = {
-      'search_knowledge_base': 'Searched knowledge base',
-      'search_uploaded_documents': 'Searched documents',
-      'search_web': 'Searched web',
-      'search_web_for_market_data': 'Searched web (market data)',
-      'search_one_development_website': 'Searched One Development website',
-      'scrape_webpage': 'Scraped webpage',
-      'download_and_read_pdf': 'Read PDF document',
-      'fetch_project_brochure': 'Fetched project brochure',
-      'get_project_details': 'Got project details',
-      'find_and_read_brochure': 'Found and read brochure',
-      'get_dubai_market_context': 'Got Dubai market context',
-      'get_user_context': 'Checked user context',
-      'save_user_information': 'Saved user information',
-      'deep_research': 'Deep research',
-      'analyze_pricing': 'Analyzed pricing',
-      'compare_properties': 'Compared properties',
+      // Subagents (specialized AI agents)
+      'deep_research': { label: '🔬 Deep Research Agent', desc: 'Specialized in comprehensive market research' },
+      'analyze_pricing': { label: '💰 Pricing Analysis Agent', desc: 'Expert in property valuation and pricing' },
+      'compare_properties': { label: '⚖️ Comparison Agent', desc: 'Specialized in property comparisons' },
+      'guide_buyer_journey': { label: '🗺️ Buyer Journey Agent', desc: 'Expert in guiding purchase process' },
+      // Regular tools
+      'search_knowledge_base': { label: 'Searched knowledge base', desc: '' },
+      'search_uploaded_documents': { label: 'Searched documents', desc: '' },
+      'search_web': { label: 'Searched web', desc: '' },
+      'search_web_for_market_data': { label: 'Searched web (market data)', desc: '' },
+      'search_one_development_website': { label: 'Searched One Development website', desc: '' },
+      'scrape_webpage': { label: 'Scraped webpage', desc: '' },
+      'download_and_read_pdf': { label: 'Read PDF document', desc: '' },
+      'fetch_project_brochure': { label: 'Fetched project brochure', desc: '' },
+      'get_project_details': { label: 'Got project details', desc: '' },
+      'find_and_read_brochure': { label: 'Found and read brochure', desc: '' },
+      'get_dubai_market_context': { label: 'Got Dubai market context', desc: '' },
+      'get_user_context': { label: 'Checked user context', desc: '' },
+      'save_user_information': { label: 'Saved user information', desc: '' },
     };
-    return toolDisplayMap[toolName] || toolName.replace(/_/g, ' ');
+    return toolDisplayMap[toolName] || { label: toolName.replace(/_/g, ' '), desc: '' };
   };
   
   return (
@@ -179,7 +217,10 @@ const ThinkingSummary = ({ message }) => {
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <span className="thinking-summary-label">
-          Thought for {duration}s
+          💭 Thought for {duration}s
+          {subagentCalls.length > 0 && (
+            <span className="subagent-badge"> • {subagentCalls.length} Subagent{subagentCalls.length > 1 ? 's' : ''} Summoned</span>
+          )}
         </span>
         <button className="thinking-summary-toggle">
           {isExpanded ? '▼' : '▶'}
@@ -188,17 +229,57 @@ const ThinkingSummary = ({ message }) => {
       
       {isExpanded && (
         <div className="thinking-summary-content">
-          {toolCalls.map((step, idx) => (
-            <div key={idx} className="thinking-summary-item">
-              <span className="thinking-summary-bullet">•</span>
-              <span className="thinking-summary-text">
-                {getToolDisplay(step.tool)}
-                {step.query && (
-                  <span className="thinking-summary-query"> "{step.query}"</span>
-                )}
-              </span>
+          {/* Subagents Section - Show first if present */}
+          {subagentCalls.length > 0 && (
+            <div className="subagents-section">
+              <div className="subagents-header">
+                <span className="subagents-icon">🤖</span>
+                <span className="subagents-title">Specialized Subagents Deployed ({subagentCalls.length})</span>
+              </div>
+              {subagentCalls.map((step, idx) => {
+                const display = getToolDisplay(step.tool, true);
+                return (
+                  <div key={`subagent-${idx}`} className="subagent-item">
+                    <div className="subagent-name">{display.label}</div>
+                    {display.desc && (
+                      <div className="subagent-desc">{display.desc}</div>
+                    )}
+                    {step.query && (
+                      <div className="subagent-task">
+                        <span className="subagent-task-label">Task:</span> "{step.query}"
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          )}
+          
+          {/* Regular Tools Section */}
+          {regularToolCalls.length > 0 && (
+            <div className="regular-tools-section">
+              {subagentCalls.length > 0 && (
+                <div className="tools-header">
+                  <span className="tools-icon">🔧</span>
+                  <span className="tools-title">Tools Used ({regularToolCalls.length})</span>
+                </div>
+              )}
+              {regularToolCalls.map((step, idx) => {
+                const display = getToolDisplay(step.tool, false);
+                return (
+                  <div key={`tool-${idx}`} className="thinking-summary-item">
+                    <span className="thinking-summary-bullet">•</span>
+                    <span className="thinking-summary-text">
+                      {display.label}
+                      {step.query && (
+                        <span className="thinking-summary-query"> "{step.query}"</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -256,6 +337,95 @@ const ThinkingSteps = ({ steps, isVisible }) => {
   );
 };
 
+// Context Monitor Component
+const ContextMonitor = ({ sessionId }) => {
+  const [contextData, setContextData] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+
+  useEffect(() => {
+    const fetchContext = async () => {
+      try {
+        const data = await chatService.getContextStatus(sessionId);
+        setContextData(data);
+      } catch (error) {
+        console.error('Error fetching context:', error);
+      }
+    };
+
+    fetchContext();
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchContext, 5000);
+    return () => clearInterval(interval);
+  }, [sessionId]);
+
+  if (!contextData) return null;
+
+  const percentage = contextData.percentage_used || 0;
+  const isNearLimit = percentage > 70;
+  const isAtLimit = percentage > 85;
+
+  return (
+    <div className={`context-monitor ${showDetails ? 'expanded' : ''}`}>
+      <div className="context-header" onClick={() => setShowDetails(!showDetails)}>
+        <span className="context-icon">📊</span>
+        <span className="context-label">Context</span>
+        <span className={`context-percentage ${isAtLimit ? 'critical' : isNearLimit ? 'warning' : ''}`}>
+          {percentage.toFixed(1)}%
+        </span>
+        <span className="context-toggle">{showDetails ? '▼' : '▶'}</span>
+      </div>
+      
+      {/* Progress bar */}
+      <div className="context-bar">
+        <div 
+          className={`context-fill ${isAtLimit ? 'critical' : isNearLimit ? 'warning' : ''}`}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      </div>
+
+      {showDetails && (
+        <div className="context-details">
+          <div className="context-stat">
+            <span className="stat-label">Tokens:</span>
+            <span className="stat-value">
+              {contextData.tokens_used?.toLocaleString()} / {contextData.max_tokens?.toLocaleString()}
+            </span>
+          </div>
+          <div className="context-stat">
+            <span className="stat-label">Model:</span>
+            <span className="stat-value">{contextData.model}</span>
+          </div>
+          {contextData.breakdown && (
+            <div className="context-breakdown">
+              <div className="breakdown-item">
+                <span>💬 Messages:</span>
+                <span>{contextData.breakdown.messages?.toLocaleString()}</span>
+              </div>
+              <div className="breakdown-item">
+                <span>📝 System:</span>
+                <span>{contextData.breakdown.system_prompt?.toLocaleString()}</span>
+              </div>
+              <div className="breakdown-item">
+                <span>🛠️ Tools:</span>
+                <span>{contextData.breakdown.tools?.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+          <div className={`filesystem-status ${contextData.filesystem_active ? 'active' : 'ready'}`}>
+            <span className="filesystem-icon">💾</span>
+            <span className="filesystem-text">
+              {contextData.filesystem_active 
+                ? '🟢 FilesystemMiddleware: ACTIVE' 
+                : '⚪ FilesystemMiddleware: Ready (activates at 85%)'
+              }
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ChatInterface = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -274,6 +444,7 @@ const ChatInterface = () => {
   const [currentPhase, setCurrentPhase] = useState('');
   const [toolInfo, setToolInfo] = useState(null);
   const [currentAction, setCurrentAction] = useState(null); // Track CURRENT action only (Cursor-style)
+  const [showContextMonitor, setShowContextMonitor] = useState(true);
   
   // Refs to track accumulated text
   const thinkingRef = useRef('');
@@ -525,33 +696,38 @@ const ChatInterface = () => {
               if (event.phase === 'thinking') {
                 // Set current action to thinking (replaces previous)
                 setCurrentAction({ type: 'thinking' });
+                // Initialize thinking stream if not already set
+                if (!thinkingRef.current) {
+                  thinkingRef.current = '';
+                }
                 flushSync(() => {
                   setMessages(prev =>
                     prev.map(m =>
                       m.id === streamingMessageIdRef.current
-                        ? { ...m, thinkingPhase: 'thinking' }
+                        ? { ...m, thinkingPhase: 'thinking', thinkingStream: m.thinkingStream || '' }
                         : m
                     )
                   );
                 });
+                console.log('[Phase] Thinking phase started');
               }
               // When searching phase starts
               if (event.phase === 'searching') {
                 setCurrentAction({ type: 'searching' });
               }
-              // When the model switches to responding, clear the transient thinking text
+              // When the model switches to responding, keep thinking text but mark phase as responding
               if (event.phase === 'responding') {
                 // Set current action to responding (replaces previous)
                 setCurrentAction({ type: 'responding' });
                 const endedAt = Date.now();
-                thinkingRef.current = '';
+                // Don't clear thinking text - it should persist for the summary
                 flushSync(() => {
                   setMessages(prev =>
                     prev.map(m =>
                       m.id === streamingMessageIdRef.current
                         ? {
                             ...m,
-                            thinkingStream: '',
+                            // Keep thinkingStream for summary, just update phase
                             thinkingPhase: 'responding',
                             thinkingEndedAt: m.thinkingEndedAt || endedAt,
                           }
@@ -563,13 +739,20 @@ const ChatInterface = () => {
               break;
             
             case 'thinking':
+              // Ensure we're in thinking phase - set phase and action immediately
+              setCurrentPhase('thinking');
+              setCurrentAction({ type: 'thinking' });
               thinkingRef.current += event.token;
+              // Log first few thinking tokens for debugging
+              if (thinkingTokenCount < 3) {
+                console.log('[Thinking Token]', event.token?.substring(0, 50));
+              }
               flushSync(() => {
                 const newThinking = thinkingRef.current;
                 setMessages(prev =>
                   prev.map(m =>
                     m.id === streamingMessageIdRef.current
-                      ? { ...m, thinkingStream: newThinking }
+                      ? { ...m, thinkingStream: newThinking, thinkingPhase: 'thinking' }
                       : m
                   )
                 );
@@ -593,23 +776,16 @@ const ChatInterface = () => {
             
             case 'tool':
               if (event.action === 'start') {
-                // Clear thinking text when tool starts
-                thinkingRef.current = '';
-                flushSync(() => {
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === streamingMessageIdRef.current
-                        ? { ...m, thinkingStream: '' }
-                        : m
-                    )
-                  );
-                });
+                // Don't clear thinking text immediately - let it persist briefly
+                // The thinking phase is complete, but we can show it until tool completes
                 // Set current action to the tool (replaces previous action)
                 setCurrentAction({ 
                   toolName: event.tool, 
                   query: event.query 
                 });
                 setToolInfo({ tool: event.tool, query: event.query });
+                // Update phase to searching/executing
+                setCurrentPhase('searching');
               } else if (event.action === 'result') {
                 // Show processing results briefly, then it will be replaced by next action
                 setCurrentAction({ type: 'tool_result', detail: 'Processing results...' });
@@ -681,6 +857,7 @@ const ChatInterface = () => {
               setCurrentPhase('done');
               setCurrentAction(null); // Clear action completely
               setToolInfo(null); // Clear tool info
+              setIsStreaming(false); // Stop streaming immediately
               suggestedActions = event.suggested_actions || [];
               flushSync(() => {
                 const endedAt = Date.now();
@@ -691,6 +868,7 @@ const ChatInterface = () => {
                           ...m,
                           thinkingPhase: 'done',
                           thinkingEndedAt: m.thinkingEndedAt || endedAt,
+                          isStreaming: false, // Mark message as not streaming
                         }
                       : m
                   )
@@ -826,7 +1004,19 @@ const ChatInterface = () => {
           </div>
           <h1>Luna - AI Agent</h1>
           <p>Ask me anything about One Development</p>
+          <button 
+            className={`context-toggle-btn ${showContextMonitor ? 'active' : ''}`}
+            onClick={() => setShowContextMonitor(!showContextMonitor)}
+            title="Toggle Context Monitor"
+          >
+            📊
+          </button>
         </div>
+
+        {/* Context Monitor */}
+        {showContextMonitor && sessionId && (
+          <ContextMonitor sessionId={sessionId} />
+        )}
 
         <div className="chat-messages">
           {messages.length === 0 ? (
@@ -873,7 +1063,7 @@ const ChatInterface = () => {
                       <ActionDisplay
                         currentAction={currentAction}
                         thinkingText={message.thinkingStream}
-                        phase={currentPhase || 'thinking'}
+                        phase={message.thinkingPhase || currentPhase || 'thinking'}
                         isActive={message.isStreaming}
                       />
                     )}

@@ -84,10 +84,25 @@ class MemoryManager:
         return memories
     
     def get_user_name(self) -> Optional[str]:
-        """Get the user's name if stored"""
+        """Get the user's name if stored - searches across ALL conversations"""
+        # First check current conversation
         memories = self.retrieve_memory(memory_type='user_info', key='name')
         if memories:
             return memories[0]['value']
+        
+        # If not found, search across ALL conversations for user names
+        # This enables cross-session memory
+        global_memories = AgentMemory.objects.filter(
+            memory_type='user_info',
+            key='name'
+        ).order_by('-importance_score', '-last_accessed')
+        
+        if global_memories.exists():
+            # Update last accessed
+            global_memories[0].last_accessed = timezone.now()
+            global_memories[0].save()
+            return global_memories[0].value
+        
         return None
     
     def store_user_name(self, name: str) -> None:
@@ -104,27 +119,27 @@ class MemoryManager:
         self.store_memory('preference', preference_key, preference_value, importance=0.8)
     
     def get_conversation_context(self) -> str:
-        """Get a summary of important memories for this conversation"""
-        memories = AgentMemory.objects.filter(
+        """Get a summary of important memories - searches current conversation AND globally for user info"""
+        # Get memories from current conversation
+        local_memories = AgentMemory.objects.filter(
             conversation=self.conversation
         ).order_by('-importance_score', '-last_accessed')[:10]
         
-        if not memories:
-            return "No previous context available."
+        # Get user name from ANY conversation (cross-session memory)
+        user_name = self.get_user_name()
         
         context_parts = []
-        user_name = None
         preferences = []
         facts = []
         
-        for memory in memories:
-            if memory.memory_type == 'user_info' and memory.key == 'name':
-                user_name = memory.value
-            elif memory.memory_type == 'preference':
+        # Process local memories
+        for memory in local_memories:
+            if memory.memory_type == 'preference':
                 preferences.append(f"{memory.key}: {memory.value}")
             elif memory.memory_type == 'fact':
                 facts.append(memory.value)
         
+        # Add user name if found (from any conversation)
         if user_name:
             context_parts.append(f"User's name: {user_name}")
         
@@ -134,7 +149,7 @@ class MemoryManager:
         if facts:
             context_parts.append(f"Previous facts discussed: {'; '.join(facts[:3])}")
         
-        return " | ".join(context_parts) if context_parts else "First conversation with this user."
+        return " | ".join(context_parts) if context_parts else ("First conversation with this user." if not user_name else f"User's name: {user_name}")
     
     def extract_and_store_user_info(self, message: str, response: str) -> None:
         """

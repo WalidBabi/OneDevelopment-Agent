@@ -188,7 +188,7 @@ export const chatService = {
         quality: quality, // 'fast' mode: optimized for speed (10-20s with SadTalker)
       }, {
         signal, // Pass AbortSignal to axios
-        timeout: 180000, // 3 minute timeout for video generation
+        timeout: 600000, // 10 minute timeout for video generation (videos can take 5-10 minutes)
       });
       return response.data;
     } catch (error) {
@@ -210,12 +210,31 @@ export const chatService = {
     }
   },
 
+  // Get the last generated avatar video
+  getLastAvatarVideo: async () => {
+    try {
+      const response = await api.get('/avatar/last-video/');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting last video:', error);
+      // Return null if no video exists or service unavailable
+      if (error.response?.status === 404 || error.response?.status === 503) {
+        return { exists: false };
+      }
+      throw error;
+    }
+  },
+
   avatarHealth: async () => {
     try {
       const response = await api.get('/avatar/health/');
       return response.data;
     } catch (error) {
-      console.error('Error checking avatar health:', error);
+      // 404 or other errors are expected if avatar service is not configured
+      // Only log if it's not a 404/503 (expected service unavailable)
+      if (error.response?.status !== 404 && error.response?.status !== 503) {
+        console.warn('Avatar health check failed:', error.response?.status || error.message);
+      }
       return { status: 'unavailable' };
     }
   },
@@ -254,6 +273,18 @@ export const chatService = {
     } catch (error) {
       console.error('Error fetching TTS voices:', error);
       return { voices: [] };
+    }
+  },
+
+  // Context monitoring
+  getContextStatus: async (sessionId = null) => {
+    try {
+      const url = sessionId ? `/context/status/?session_id=${sessionId}` : '/context/status/';
+      const response = await api.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching context status:', error);
+      throw error;
     }
   },
 };

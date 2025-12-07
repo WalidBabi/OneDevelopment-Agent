@@ -2,7 +2,7 @@
 
 **Date:** December 2, 2025  
 **Status:** ✅ DEPLOYED AND OPERATIONAL  
-**Version:** 3.0.0
+**Version:** 4.0.0 (DeepAgents-based)
 
 ---
 
@@ -48,11 +48,13 @@ Luna has been **successfully reimplemented and deployed** with a clean, simplifi
 
 ## 📝 What Was Implemented
 
-### Python 3.9 Compatible Clean Architecture
+### DeepAgents Architecture
 
 **Original Plan:** Use DeepAgents library  
-**Challenge:** DeepAgents requires Python 3.11+, environment has Python 3.9  
-**Solution:** Created a clean, simplified wrapper inspired by DeepAgents principles
+**Current State (v4.0.0):** Using the official `deepagents` package with:
+- `create_deep_agent()` for core agent wiring  
+- DeepAgents middleware (todos, filesystem, subagents, summarization, HITL)  
+- LangGraph backend with a memory store for long‑term state
 
 ### Implementation Highlights
 
@@ -156,15 +158,13 @@ Response
 
 ### Implementation vs DeepAgents
 
-| Feature | DeepAgents | Our Implementation |
-|---------|------------|-------------------|
+| Feature | DeepAgents | Our Implementation (v4.0.0) |
+|---------|------------|-----------------------------|
 | **Pattern** | ReAct agent | ✅ ReAct agent |
-| **Setup** | `create_deep_agent()` | ✅ `create_luna_agent()` |
-| **Streaming** | Built-in | ✅ Async-ready |
-| **Python** | 3.11+ required | ✅ 3.9+ compatible |
-| **Code Quality** | Clean | ✅ Equally clean |
-
-**Result:** Same clean architecture, works with Python 3.9!
+| **Setup** | `create_deep_agent()` | ✅ Uses `deepagents.create_deep_agent()` |
+| **Middleware** | Planning, FS, subagents, HITL | ✅ DeepAgents middleware stack |
+| **Memory** | LangGraph Store / backends | ✅ CompositeBackend + InMemoryStore |
+| **Code Quality** | Clean | ✅ Clean, minimal Luna wrapper |
 
 ---
 

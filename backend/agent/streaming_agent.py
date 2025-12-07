@@ -26,7 +26,9 @@ from agent.tools import (
     fetch_project_brochure,
     get_project_details,
     find_and_read_brochure,
-    download_and_read_pdf
+    download_and_read_pdf,
+    get_user_context,
+    save_user_information
 )
 from agent.verification_guardrails import get_verification_guardrails, VerificationLevel
 
@@ -50,15 +52,29 @@ class LunaStreamingAgent:
             streaming=True
         )
     
-    def _get_thinking_prompt(self, query: str, context: str = "") -> str:
+    def _get_thinking_prompt(self, query: str, context: str = "", session_id: str = "default") -> str:
         """Prompt that makes the LLM think out loud and plan tool usage"""
         return f"""You are Luna, an AI assistant for One Development (oneuae.com).
 
-TASK: Think through how to answer this user question. Be THOROUGH - never give up without trying to find the answer.
+## 🧠 MEMORY CHECK - ALWAYS REMEMBER USER INFORMATION
 
-USER QUESTION: {query}
+**BEFORE thinking about the answer:**
+1. **Is this a PERSONAL question?** (e.g., "what is my name?", "do you know my name?")
+   - If YES: ONLY use get_user_context tool - NEVER search the web!
+   - Personal questions should NEVER trigger web searches
+
+2. Check if the user shared their name (look for "my name is", "I'm", "call me")
+   - If they shared their name, you MUST save it using save_user_information tool
+
+3. Always check get_user_context FIRST to see if you already know their name from ANY previous conversation
+
+**USER QUESTION: {query}**
 
 {f"AVAILABLE CONTEXT: {context}" if context else ""}
+
+**SESSION ID: {session_id}** - Use this for all memory operations
+
+**IMPORTANT:** If the question is about the user's personal information (name, preferences), ONLY use get_user_context. Do NOT search the web.
 
 YOUR AVAILABLE TOOLS:
 1. search_knowledge_base - One Development's internal knowledge
@@ -89,7 +105,7 @@ IMPORTANT:
 
 Think out loud now. Be concise but show your reasoning:"""
 
-    def _get_response_prompt(self, query: str, context: str, thinking: str, tool_results: Dict[str, str]) -> str:
+    def _get_response_prompt(self, query: str, context: str, thinking: str, tool_results: Dict[str, str], user_name: str = None) -> str:
         """Generate final response based on thinking and all gathered context"""
         
         # Format tool results
@@ -101,9 +117,16 @@ Think out loud now. Be concise but show your reasoning:"""
         if not tool_context:
             tool_context = "No specific information found from tools."
         
+        # Add user name greeting if available
+        greeting = ""
+        if user_name:
+            greeting = f"Hello {user_name}! "
+        
         return f"""You are Luna, an AI assistant for One Development (oneuae.com).
 
 USER QUESTION: {query}
+
+{f"USER'S NAME: {user_name}" if user_name else ""}
 
 YOUR ANALYSIS:
 {thinking}
@@ -112,9 +135,10 @@ INFORMATION GATHERED:
 {tool_context}
 
 RESPONSE GUIDELINES:
-1. **If you found relevant information**: Share it clearly and helpfully
-2. **If partially relevant info found**: Share what you found, acknowledge gaps, suggest next steps
-3. **If no specific info found**: 
+1. **ALWAYS use the user's name if you know it**: Start with "Hello {user_name}!" if name is available
+2. **If you found relevant information**: Share it clearly and helpfully
+3. **If partially relevant info found**: Share what you found, acknowledge gaps, suggest next steps
+4. **If no specific info found**: 
    - Provide general helpful context about the topic
    - Suggest contacting the sales team at oneuae.com
    - NEVER just say "I don't know" - always provide VALUE
@@ -126,6 +150,7 @@ FORMATTING:
 - End with a clear call to action when appropriate
 
 REMEMBER: You represent One Development. Be confident, helpful, and always guide the user forward.
+{f"IMPORTANT: The user's name is {user_name} - use it in your response!" if user_name else ""}
 
 Respond naturally and helpfully:"""
 
@@ -150,13 +175,66 @@ Respond naturally and helpfully:"""
         
         thinking_content = ""
         tool_results = {}
+        user_name = None
+        
+        # ====================================================================
+        # PHASE 0: Check user context and save name if mentioned
+        # ====================================================================
+        yield {"type": "phase", "content": "checking_memory"}
+        
+        # Check for user name in query
+        import re
+        name_patterns = [
+            r"my name is (\w+)",
+            r"i'm (\w+)",
+            r"i am (\w+)",
+            r"call me (\w+)",
+            r"this is (\w+)",
+            r"name is (\w+)"
+        ]
+        
+        query_lower = query.lower()
+        for pattern in name_patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                name = match.group(1).capitalize()
+                # Validate it's likely a name (not a common word)
+                common_words = ['the', 'and', 'for', 'you', 'that', 'this', 'are', 'was', 'has', 'had']
+                if len(name) > 2 and name.lower() not in common_words:
+                    user_name = name
+                    break
+        
+        # If name found, save it
+        if user_name:
+            try:
+                yield {"type": "tool_start", "tool": "save_user_information", "query": f"Saving name: {user_name}"}
+                result = save_user_information.invoke({"session_id": session_id, "information": user_name, "info_type": "name"})
+                yield {"type": "tool_result", "content": result}
+            except Exception as e:
+                yield {"type": "tool_error", "content": f"Could not save name: {str(e)}"}
+        
+        # Get existing user context
+        try:
+            yield {"type": "tool_start", "tool": "get_user_context", "query": f"Checking context for session {session_id}"}
+            context_result = get_user_context.invoke({"session_id": session_id})
+            tool_results['user_context'] = context_result
+            
+            # Extract name from context if available
+            if "name:" in context_result.lower() or "user's name:" in context_result.lower():
+                name_match = re.search(r"(?:name|name:)\s*(\w+)", context_result, re.IGNORECASE)
+                if name_match:
+                    user_name = name_match.group(1)
+            
+            yield {"type": "tool_result", "content": context_result[:200]}
+        except Exception as e:
+            tool_results['user_context'] = f"Could not retrieve context: {str(e)}"
         
         # ====================================================================
         # PHASE 1: Stream thinking tokens
         # ====================================================================
         yield {"type": "phase", "content": "thinking"}
         
-        thinking_prompt = self._get_thinking_prompt(query)
+        thinking_prompt = self._get_thinking_prompt(query, context=tool_results.get('user_context', ''), session_id=session_id)
         
         for chunk in self.streaming_llm.stream([
             SystemMessage(content="You are Luna, thinking through a user's question. Plan which tools to use."),
@@ -171,9 +249,34 @@ Respond naturally and helpfully:"""
         # ====================================================================
         # PHASE 2: Execute tools based on thinking - BE PERSISTENT!
         # ====================================================================
-        yield {"type": "phase", "content": "searching"}
         
         query_lower = query.lower()
+        
+        # Detect personal questions - NEVER search web for these!
+        personal_question_keywords = [
+            'what is my name', 'do you know my name', 'my name', 'what\'s my name',
+            'who am i', 'remember my name', 'what did i tell you my name'
+        ]
+        is_personal_question = any(kw in query_lower for kw in personal_question_keywords)
+        
+        # If it's a personal question, we already checked memory in Phase 0
+        # Skip all web searches and go straight to response
+        if is_personal_question:
+            yield {"type": "phase", "content": "responding"}
+            # We already have user_name from Phase 0, so we can respond directly
+            if user_name:
+                response_content = f"Yes! Your name is {user_name}. How can I help you today, {user_name}?"
+            else:
+                response_content = "I don't have your name saved yet. What would you like me to call you?"
+            
+            # Stream the response
+            for char in response_content:
+                yield {"type": "response_token", "content": char}
+            
+            yield {"type": "done", "full_response": response_content}
+            return
+        
+        yield {"type": "phase", "content": "searching"}
         
         # Detect if this is about a specific project or brochure
         project_keywords = ['laguna', 'residence', 'project', 'development', 'tower', 'villa']
@@ -285,7 +388,7 @@ Respond naturally and helpfully:"""
         # ====================================================================
         yield {"type": "phase", "content": "responding"}
         
-        response_prompt = self._get_response_prompt(query, "", thinking_content, tool_results)
+        response_prompt = self._get_response_prompt(query, "", thinking_content, tool_results, user_name=user_name)
         response_content = ""
         
         for chunk in self.streaming_llm.stream([

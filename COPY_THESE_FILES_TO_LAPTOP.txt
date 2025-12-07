@@ -1,0 +1,91 @@
+================================================================================
+  COPY THESE FILES FROM AWS SERVER TO YOUR WINDOWS LAPTOP
+================================================================================
+
+You need to copy these 4 files to fix the avatar OpenAI voice issue:
+
+FROM AWS SERVER                              TO WINDOWS LAPTOP
+==================                           ==================
+
+1. avatar_service/                           C:\Users\Walid\Downloads\
+   sadtalker_generator.py          →         OneDevelopment-Agent-main\
+                                             OneDevelopment-Agent-main\
+                                             avatar_service\
+                                             sadtalker_generator.py
+
+2. avatar_service/                           C:\Users\Walid\Downloads\
+   avatar_server_simple.py         →         OneDevelopment-Agent-main\
+                                             OneDevelopment-Agent-main\
+                                             avatar_service\
+                                             avatar_server_simple.py
+
+3. avatar_service/                           C:\Users\Walid\Downloads\
+   avatar_server_sadtalker.py      →         OneDevelopment-Agent-main\
+                                             OneDevelopment-Agent-main\
+                                             avatar_service\
+                                             avatar_server_sadtalker.py
+
+4. avatar_service/                           C:\Users\Walid\Downloads\
+   START_AVATAR_WITH_OPENAI_AUDIO.bat →      OneDevelopment-Agent-main\
+                                             OneDevelopment-Agent-main\
+                                             avatar_service\
+                                             START_AVATAR_WITH_OPENAI_AUDIO.bat
+
+================================================================================
+  AFTER COPYING FILES
+================================================================================
+
+1. Open Command Prompt or PowerShell on your Windows laptop
+
+2. Navigate to avatar_service folder:
+   cd C:\Users\Walid\Downloads\OneDevelopment-Agent-main\OneDevelopment-Agent-main\avatar_service
+
+3. Stop the current avatar service (if running):
+   Press Ctrl+C
+
+4. Start the new avatar service:
+   START_AVATAR_WITH_OPENAI_AUDIO.bat
+
+5. Keep ngrok running in another terminal
+
+6. Test from frontend: http://13.62.188.127:3000/
+
+================================================================================
+  WHAT TO LOOK FOR IN LOGS
+================================================================================
+
+✅ GOOD (OpenAI audio is being used):
+   📥 Downloading OpenAI TTS audio from: https://...
+   ✅ Downloaded OpenAI TTS audio: C:\...\generated_audio\abc123.mp3
+   🎬 Generating video with OpenAI TTS audio...
+
+❌ BAD (Fallback to local TTS):
+   Audio URL: None
+   ⚠️ Failed to download audio_url
+   🎤 Generating audio with local TTS
+
+================================================================================
+  EXPECTED RESULT
+================================================================================
+
+✅ Video plays with natural OpenAI shimmer voice (not robotic)
+✅ Video appears in the frontend
+✅ Generation time: 8-15 seconds
+✅ Smooth playback
+
+================================================================================
+  NEED HELP?
+================================================================================
+
+Read these guides (also on AWS server):
+- QUICK_FIX_GUIDE.md          - Quick reference
+- AVATAR_OPENAI_TTS_FIX.md    - Detailed technical guide
+- AVATAR_FIX_SUMMARY.md       - Complete summary
+
+================================================================================
+
+
+
+
+
+

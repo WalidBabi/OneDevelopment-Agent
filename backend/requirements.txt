@@ -4,13 +4,15 @@ django-cors-headers==4.3.1
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0
 
-# LangChain and LangGraph
-langgraph==0.2.52
-langchain==0.3.7
-langchain-openai==0.2.8
-langchain-community==0.3.7
-
-# Note: DeepAgents requires Python 3.11+, so we use a clean LangGraph wrapper instead
+# DeepAgents and LangChain
+# REQUIRES: Python 3.11+
+# Version pinning is CRITICAL for compatibility
+deepagents==0.1.4
+langchain==1.0.0
+langchain-core==1.0.0
+langchain-anthropic==1.0.0
+langchain-openai==1.0.0
+langgraph>=1.0.2
 
 # Web scraping and data ingestion
 beautifulsoup4==4.12.2
@@ -33,3 +35,8 @@ duckduckgo-search==6.2.1
 PyPDF2==3.0.1
 pypdf==3.17.4
 
+# Tavily for web research
+tavily-python>=0.3.0
+
+# HeyGen for professional talking avatar videos
+httpx>=0.24.0  # For HeyGen API calls

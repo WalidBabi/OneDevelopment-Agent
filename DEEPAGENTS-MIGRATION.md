@@ -2,10 +2,15 @@
 
 ## Overview
 
+> **Update – December 4, 2025 (v4.0.0)**  
+> Luna now uses the **official `deepagents` library** end‑to‑end (no more custom “DeepAgents-inspired” wrapper).  
+> The core agent is created via `deepagents.create_deep_agent()` with DeepAgents middleware, subagents, and a LangGraph backend for long‑term memory.
+
 Luna has been completely reimplemented using **DeepAgents** - a standalone library built on top of LangGraph that provides a cleaner, more streamlined interface for building ReAct agents.
 
-**Migration Date:** December 2, 2025  
-**Version:** 3.0.0 (Major version bump)
+**Migration Date:** December 2, 2025 (initial wrapper)  
+**DeepAgents Upgrade:** December 4, 2025  
+**Version:** 4.0.0 (DeepAgents-based)
 
 ---
 

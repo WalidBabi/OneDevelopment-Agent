@@ -1,0 +1,197 @@
+/* Luna HeyGen Avatar Component Styles */
+
+.luna-heygen-avatar {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8f9fa;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.avatar-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.avatar-fallback {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+}
+
+.avatar-silhouette {
+  width: 60%;
+  height: 60%;
+  opacity: 0.9;
+  transition: all 0.3s ease;
+}
+
+/* Listening indicator */
+.listening-indicator {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 10px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+.listening-indicator span {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  background-color: #007bff;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.listening-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.listening-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { 
+    transform: scale(0);
+    opacity: 0.5;
+  } 
+  40% { 
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* Audio visualizer */
+.audio-visualizer {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  height: 20px;
+  align-items: flex-end;
+  z-index: 5;
+}
+
+.audio-bar {
+  width: 3px;
+  background-color: rgba(0, 123, 255, 0.8);
+  border-radius: 2px;
+  transition: height 0.1s ease, opacity 0.1s ease;
+}
+
+/* Loading state */
+.luna-heygen-avatar.loading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #666;
+  font-size: 0.9em;
+  text-align: center;
+  padding: 20px;
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #007bff;
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 10px;
+}
+
+/* Error state */
+.luna-heygen-avatar.error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 20px;
+  text-align: center;
+}
+
+.error-message p {
+  margin: 0 0 5px 0;
+  font-weight: bold;
+}
+
+.error-message small {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .luna-heygen-avatar {
+    border-radius: 12px;
+  }
+  
+  .avatar-silhouette {
+    width: 70%;
+    height: 70%;
+  }
+  
+  .listening-indicator {
+    bottom: 15%;
+  }
+  
+  .audio-visualizer {
+    bottom: 10%;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .luna-heygen-avatar {
+    background-color: #2d3748;
+  }
+  
+  .avatar-fallback {
+    background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+  }
+  
+  .avatar-silhouette {
+    opacity: 0.8;
+  }
+  
+  .listening-indicator {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .luna-heygen-avatar.error {
+    background-color: #f56565;
+    color: white;
+  }
+}

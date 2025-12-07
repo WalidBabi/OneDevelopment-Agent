@@ -8,8 +8,13 @@ case "$1" in
     # Start Backend
     cd /home/ec2-user/OneDevelopment-Agent/backend
     source venv/bin/activate
+    
+    # Set avatar service URL (update this when ngrok restarts)
+    export AVATAR_SERVICE_URL="https://fa8978e3c6ef.ngrok-free.app"
+    
     nohup python manage.py runserver 0.0.0.0:8000 > /tmp/backend.log 2>&1 &
     echo "✅ Backend started on port 8000"
+    echo "   Avatar Service URL: $AVATAR_SERVICE_URL"
     
     # Start Frontend
     cd /home/ec2-user/OneDevelopment-Agent/frontend

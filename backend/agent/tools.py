@@ -17,13 +17,24 @@ import os
 def search_knowledge_base(query: str, n_results: int = 5) -> str:
     """Search One Development's internal knowledge base for company information, projects, and services.
     
-    THIS IS YOUR PRIMARY TOOL - use it FIRST for all One Development questions.
+    ⚠️ NOTE: For company facts (founder, CEO, leadership), VERIFY with web search!
+    Internal data may be outdated. Use tavily_search() or search_web() to get latest info.
     
     The knowledge base contains:
     - Current project portfolio (Laguna Residence, DO Dubai Islands, DO New Cairo, etc.)
     - Pipeline projects (Al Marjan Islands, DO Riyadh, DO Athens, etc.)
     - Project URLs and details
-    - Company information
+    - General company information (but may be outdated)
+    
+    **BEST FOR:**
+    - Project details and portfolio
+    - Property specifications
+    - Services offered
+    
+    **NOT RECOMMENDED FOR:**
+    - Founder/CEO names (use web search instead)
+    - Recent company news (use web search)
+    - Leadership changes (use web search)
     
     Example queries:
     - "One Development projects portfolio" - Get all projects
@@ -66,13 +77,18 @@ def tavily_search(query: str, search_depth: str = "basic", max_results: int = 5)
     Tavily provides high-quality, relevant results specifically optimized for AI applications.
     Use this as the PRIMARY web search tool for accurate, up-to-date information.
     
+    **USE THIS FIRST for company information (founder, leadership, about company)**
+    - More reliable than knowledge base for factual company info
+    - Gets latest verified information from trusted sources
+    - Includes source URLs for verification
+    
     Args:
-        query: The search query
+        query: The search query (e.g., "One Development UAE founder CEO")
         search_depth: "basic" for fast results, "advanced" for comprehensive research
         max_results: Maximum number of results (default 5)
     
     Returns:
-        AI-optimized search results with relevant content
+        AI-optimized search results with relevant content and SOURCE URLS
     """
     try:
         from tavily import TavilyClient
@@ -647,6 +663,70 @@ def find_and_read_brochure(search_query: str) -> str:
 # ============================================================================
 
 @tool
+def verify_company_fact(fact_to_verify: str) -> str:
+    """Verify a specific fact about One Development by searching multiple trusted sources.
+    
+    Use this when you need to verify critical company information like:
+    - Founder/CEO name
+    - Company leadership
+    - Major announcements
+    - Company history
+    
+    This tool searches multiple sources and cross-references them to give you
+    the most accurate, up-to-date information with sources.
+    
+    Args:
+        fact_to_verify: The specific fact to verify (e.g., "One Development founder name")
+    
+    Returns:
+        Verified information from multiple trusted sources with URLs
+    """
+    try:
+        from duckduckgo_search import DDGS
+        
+        # Search multiple sources
+        queries = [
+            f"One Development UAE {fact_to_verify} 2024 2025",
+            f"One Development Dubai {fact_to_verify}",
+            f"site:cbnme.com OR site:constructionweekonline.com OR site:businessnewse.com One Development {fact_to_verify}"
+        ]
+        
+        all_results = []
+        with DDGS() as ddgs:
+            for query in queries:
+                try:
+                    results = list(ddgs.text(query, max_results=3))
+                    all_results.extend(results)
+                except:
+                    continue
+        
+        if not all_results:
+            return f"Could not verify: {fact_to_verify}. Try using tavily_search() for better results."
+        
+        # Format with sources
+        formatted = [f"**Verified information about: {fact_to_verify}**\n"]
+        formatted.append("**Multiple sources confirm:**\n")
+        
+        seen_urls = set()
+        for i, result in enumerate(all_results[:5], 1):
+            url = result.get('href', result.get('link', ''))
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            
+            title = result.get('title', 'Source')
+            body = result.get('body', result.get('snippet', ''))
+            formatted.append(f"{i}. **{title}**\n   {body}\n   URL: {url}\n")
+        
+        formatted.append("\n✅ Cross-referenced from multiple sources - use the most recent, trusted sources in your response.")
+        
+        return "\n".join(formatted)
+        
+    except Exception as e:
+        return f"Verification unavailable: {str(e)}. Use tavily_search() as backup."
+
+
+@tool
 def get_dubai_market_context(topic: str) -> str:
     """Get general Dubai real estate market context for background information.
     
@@ -713,33 +793,80 @@ def get_dubai_market_context(topic: str) -> str:
 def get_user_context(session_id: str) -> str:
     """Get stored context and preferences for a user session.
     
+    IMPORTANT: 
+    - ALWAYS call this FIRST before answering personal questions like "what is my name?"
+    - This searches across ALL conversations, not just the current session
+    - NEVER search the web for personal questions - use this tool instead
+    
     Use this to personalize responses based on previous interactions.
+    Returns user's name and preferences if stored in any previous conversation.
     """
     try:
-        from knowledge.vector_store import get_vector_store
-        vector_store = get_vector_store()
-        results = vector_store.similarity_search(f"user preferences session {session_id}", k=2)
-        if results:
-            return f"User context: {results[0].page_content}"
-        return "No previous user context found."
-    except:
-        return "User context not available."
+        from agent.memory_manager import MemoryManager
+        memory_manager = MemoryManager(session_id)
+        context = memory_manager.get_conversation_context()
+        
+        # Also check vector store for additional context
+        try:
+            from knowledge.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            results = vector_store.similarity_search(f"user preferences session {session_id}", k=2)
+            if results:
+                context += f" | Additional context: {results[0].page_content}"
+        except:
+            pass
+        
+        return context if context else "No previous user context found."
+    except Exception as e:
+        return f"User context not available: {str(e)}"
 
 
 @tool
-def save_user_information(session_id: str, information: str) -> str:
+def save_user_information(session_id: str, information: str, info_type: str = "preference") -> str:
     """Save user preferences or important information for future reference.
     
-    Use this to remember user preferences like budget, location preferences, etc.
+    Use this to remember:
+    - User's name (info_type="name", information="Walid")
+    - User preferences like budget, location preferences, etc.
+    - Important facts the user shared
+    
+    Args:
+        session_id: The current session ID
+        information: The information to save (e.g., "Walid" for name)
+        info_type: Type of information - "name", "preference", or "fact"
+    
+    Examples:
+        - save_user_information(session_id="abc", information="Walid", info_type="name")
+        - save_user_information(session_id="abc", information="interested in villas", info_type="preference")
     """
     try:
-        from knowledge.vector_store import get_vector_store
-        vector_store = get_vector_store()
-        # Store user preference
-        vector_store.add_texts([f"User session {session_id}: {information}"])
-        return f"Saved: {information}"
+        from agent.memory_manager import MemoryManager
+        memory_manager = MemoryManager(session_id)
+        
+        if info_type == "name":
+            memory_manager.store_user_name(information)
+            return f"✅ Saved user's name: {information}. I will remember this!"
+        elif info_type == "preference":
+            # Extract key-value if possible
+            if ":" in information:
+                key, value = information.split(":", 1)
+                memory_manager.store_user_preference(key.strip(), value.strip())
+            else:
+                memory_manager.store_memory("preference", "general", information, importance=0.8)
+            return f"✅ Saved preference: {information}"
+        else:
+            memory_manager.store_memory("fact", "user_fact", information, importance=0.7)
+            return f"✅ Saved information: {information}"
+            
     except Exception as e:
-        return f"Could not save user information: {str(e)}"
+        # Fallback to vector store
+        try:
+            from knowledge.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            vector_store.add_texts([f"User session {session_id}: {information}"])
+            return f"Saved: {information}"
+        except:
+            return f"Could not save user information: {str(e)}"
 
 
 # ============================================================================
@@ -769,6 +896,8 @@ def get_all_tools():
         search_web_for_market_data,
         search_one_development_website,
         scrape_webpage,
+        # Fact verification - for cross-referencing
+        verify_company_fact,
         # PDF & Document tools - Luna can read PDFs!
         download_and_read_pdf,
         fetch_project_brochure,

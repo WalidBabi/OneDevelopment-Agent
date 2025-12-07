@@ -28,19 +28,15 @@ Key Components:
 - deepagents_tools.py: Advanced reasoning tools
 
 Usage:
-    from agent import get_luna_agent, chat_with_luna
+    from agent import get_luna_agent
     
     luna = get_luna_agent()
     result = luna.process_query("Tell me about One Development", session_id="user_123")
-    
-    # Or simple helper
-    response = chat_with_luna("What properties do you have?")
 """
 
 from agent.luna_deepagent import (
     LunaDeepAgent,
     get_luna_agent,
-    chat_with_luna,
 )
 
 from agent.tools import (
@@ -53,7 +49,6 @@ from agent.tools import (
 __all__ = [
     'LunaDeepAgent',
     'get_luna_agent',
-    'chat_with_luna',
     'get_all_tools',
     'get_core_tools',
     'search_knowledge_base',

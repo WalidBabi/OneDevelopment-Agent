@@ -1,0 +1,25 @@
+# ngrok Configuration File
+# Save this as: C:\Users\Walid\.ngrok2\ngrok.yml
+# Or use: ngrok config add-authtoken YOUR_TOKEN (if you have a free account)
+
+version: "2"
+authtoken: YOUR_AUTHTOKEN_HERE  # Get from https://dashboard.ngrok.com/get-started/your-authtoken
+
+tunnels:
+  avatar-service:
+    proto: http
+    addr: 8000
+    host_header: "localhost:8000"
+    inspect: true
+    # This helps with video streaming
+    bind_tls: true
+
+# Then run: ngrok start avatar-service
+
+
+
+
+
+
+
+

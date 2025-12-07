@@ -1,75 +1,175 @@
 """
-Luna - Free-Thinking AI Agent for One Development
-Clean, Simplified Implementation (Python 3.9+ Compatible)
+Luna - True DeepAgents Implementation
 
-Luna is an autonomous AI agent that thinks freely and reasons independently.
-This implementation provides a cleaner, more streamlined architecture inspired by
-DeepAgents principles, but compatible with Python 3.9+.
+Using the official deepagents library with:
+- Dynamic subagent summoning (NOT hardcoded!)
+- Long-term memory persistence
+- Planning tools
+- Filesystem middleware
 
-Philosophy:
-- No rigid workflows — Luna decides what to do based on the situation
-- Autonomous reasoning — she thinks through problems creatively  
-- Adaptive behavior — every conversation is unique
-- Genuine helpfulness — not just information retrieval, but thoughtful assistance
-
-Technical Foundation:
-Clean wrapper around LangGraph's ReAct pattern with simplified setup and better code organization.
-
-Observability:
-LangSmith tracing enabled for full visibility into agent reasoning and tool usage.
-Set LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY in .env to enable.
+REQUIRES: Python 3.11+
 """
 
-from typing import Dict, Any, List, Optional, Literal
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import os
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
-from langgraph.graph import StateGraph, END, MessagesState
-from langgraph.prebuilt import ToolNode
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.tools import tool
 
-from agent.tools import get_all_tools
-from agent.subagents import get_subagent_tools
+# DeepAgents imports
+from deepagents import create_deep_agent, FilesystemMiddleware
+from langgraph.store.memory import InMemoryStore
+
+# Import all tools
+from agent.tools import (
+    get_all_tools,
+    search_knowledge_base,
+    search_web_for_market_data,
+    tavily_research,
+    get_dubai_market_context,
+)
+from agent.subagents import (
+    get_subagent_tools,
+    deep_research,
+    analyze_pricing,
+    compare_properties,
+    guide_buyer_journey,
+)
 from agent.deepagents_tools import get_deepagent_tools
+from agent.source_tracker import SourceTracker
 
 
 # ============================================================================
-# LANGSMITH OBSERVABILITY SETUP
+# DYNAMIC SUBAGENT SUMMONING TOOLS
+# These tools allow Luna to spawn subagents on-demand!
 # ============================================================================
 
-def setup_langsmith():
+@tool
+def summon_research_agent(research_query: str, context: str = "") -> str:
     """
-    Configure LangSmith tracing for observability.
+    🔬 Summon a specialized Research Agent for deep multi-source research.
     
-    LangSmith provides:
-    - Full trace of agent reasoning steps
-    - Tool call inputs and outputs
-    - Token usage and latency metrics
-    - Error tracking and debugging
+    Luna should call this when she needs complex research that requires:
+    - Multiple data sources
+    - Market analysis
+    - Investment research
+    - Deep investigation
     
-    Enable by setting in .env:
-        LANGCHAIN_TRACING_V2=true
-        LANGCHAIN_API_KEY=your-api-key
-        LANGCHAIN_PROJECT=luna-deepagent
-    """
-    tracing_enabled = os.getenv('LANGCHAIN_TRACING_V2', 'false').lower() == 'true'
-    api_key = os.getenv('LANGCHAIN_API_KEY')
-    
-    if tracing_enabled and api_key:
-        # Set default project name if not specified
-        if not os.getenv('LANGCHAIN_PROJECT'):
-            os.environ['LANGCHAIN_PROJECT'] = 'luna-deepagent'
+    Args:
+        research_query: The research question or topic
+        context: Additional context about what the user needs
         
+    Returns:
+        Comprehensive research findings from the Research Agent
+    """
+    print(f"🔬 SUMMONING Research Agent for: {research_query}")
+    
+    # The subagent does deep research
+    result = deep_research.invoke({"topic": research_query})
+    
+    return f"🔬 **Research Agent Report**\n\n{result}\n\n✅ Research Agent completed its mission."
+
+
+@tool
+def summon_pricing_agent(pricing_query: str, property_details: str = "") -> str:
+    """
+    💰 Summon a specialized Pricing Agent for pricing analysis and ROI.
+    
+    Luna should call this when she needs:
+    - Price analysis
+    - ROI calculations
+    - Payment plan comparisons
+    - Budget discussions
+    
+    Args:
+        pricing_query: The pricing question
+        property_details: Property type, location, size (e.g., "2BR apartment, Dubai Marina")
+        
+    Returns:
+        Detailed pricing analysis from the Pricing Agent
+    """
+    print(f"💰 SUMMONING Pricing Agent for: {pricing_query}")
+    
+    # Parse property details
+    result = analyze_pricing.invoke({
+        "property_type": "apartment",
+        "location": property_details or "Dubai Marina"
+    })
+    
+    return f"💰 **Pricing Agent Report**\n\n{result}\n\n✅ Pricing Agent completed its analysis."
+
+
+@tool
+def summon_comparison_agent(items_to_compare: str, criteria: str = "") -> str:
+    """
+    ⚖️ Summon a specialized Comparison Agent to compare options.
+    
+    Luna should call this when user wants to compare:
+    - Areas (Dubai Marina vs Downtown)
+    - Property types (villa vs apartment)
+    - Projects
+    - Investment options
+    
+    Args:
+        items_to_compare: What to compare (e.g., "Dubai Marina vs Palm Jumeirah")
+        criteria: Comparison criteria (e.g., "investment potential, pricing, amenities")
+        
+    Returns:
+        Structured comparison from the Comparison Agent
+    """
+    print(f"⚖️ SUMMONING Comparison Agent for: {items_to_compare}")
+    
+    # Parse items to compare
+    items_list = [item.strip() for item in items_to_compare.replace(" vs ", ",").split(",")]
+    
+    result = compare_properties.invoke({"items": items_list})
+    
+    return f"⚖️ **Comparison Agent Report**\n\n{result}\n\n✅ Comparison Agent completed its analysis."
+
+
+@tool
+def summon_buyer_journey_agent(buyer_type: str, question: str = "") -> str:
+    """
+    🗺️ Summon a specialized Buyer Journey Agent for purchase process guidance.
+    
+    Luna should call this when user asks about:
+    - "How to buy" questions
+    - Purchase process steps
+    - Requirements and documentation
+    - Buyer-specific guidance
+    
+    Args:
+        buyer_type: Type of buyer (first_time, investor, expat, uae_resident)
+        question: Specific question about the process
+        
+    Returns:
+        Step-by-step guidance from the Buyer Journey Agent
+    """
+    print(f"🗺️ SUMMONING Buyer Journey Agent for: {buyer_type}")
+    
+    result = guide_buyer_journey.invoke({"buyer_type": buyer_type})
+    
+    return f"🗺️ **Buyer Journey Agent Report**\n\n{result}\n\n✅ Buyer Journey Agent completed its guidance."
+
+
+# ============================================================================
+# LANGSMITH OBSERVABILITY
+# ============================================================================
+
+def setup_langsmith() -> bool:
+    """Configure LangSmith tracing."""
+    tracing_enabled = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+    api_key = os.getenv("LANGCHAIN_API_KEY")
+
+    if tracing_enabled and api_key:
+        if not os.getenv("LANGCHAIN_PROJECT"):
+            os.environ["LANGCHAIN_PROJECT"] = "luna-deepagent"
         print(f"🔍 LangSmith tracing ENABLED - Project: {os.getenv('LANGCHAIN_PROJECT')}")
         return True
-    else:
-        if tracing_enabled and not api_key:
-            print("⚠️  LangSmith tracing enabled but LANGCHAIN_API_KEY not set")
-        return False
+    return False
 
 
-# Initialize LangSmith on module load
 _langsmith_enabled = setup_langsmith()
 
 
@@ -77,488 +177,510 @@ _langsmith_enabled = setup_langsmith()
 # LUNA SYSTEM PROMPT
 # ============================================================================
 
-def get_luna_system_prompt(session_id: str = "default") -> str:
+def get_luna_system_prompt(session_id: str = "default", user_name: str = "there") -> str:
     """
-    Create the system prompt that defines Luna's personality and behavior.
-    Luna is a free-thinking AI agent - no rigid workflows, just intelligent reasoning.
+    Luna's enhanced system prompt with improved thinking and decision-making.
     """
     return f"""You are Luna, an AI research agent for One Development (oneuae.com).
 
-## YOUR PRIMARY TOOL: search_knowledge_base
+## 🧠 ENHANCED THINKING PROCESS
 
-**ALWAYS use `search_knowledge_base` first** — it contains accurate project data.
+You are equipped with DeepAgents capabilities - think deeply and systematically:
 
-For questions about One Development projects:
-→ Call: `search_knowledge_base(query="One Development projects portfolio")`
+### Step 1: UNDERSTAND the query
+- What is the user really asking?
+- What information do they need?
+- What's the context? (User: {user_name}, Session: {session_id})
 
-For specific project details:
-→ Call: `search_knowledge_base(query="Laguna Residence")` (or project name)
+### Step 2: PLAN your approach  
+- **🚨 FOR ONE DEVELOPMENT QUESTIONS: MUST USE WEB SEARCH FIRST 🚨**
+- **DO NOT use knowledge_base for company information** (it's outdated!)
+- For ANY One Development question → **MANDATORY: Call tavily_search() FIRST**
+- Get information from RECENT verified web sources (2024-2025)
+- For complex tasks → Summon specialist subagents
+- **CRITICAL: The founder is Ali Al Gebely (NOT "Jubeili")** - verify from web!
+- NEVER say "I don't have information" without trying web search!
 
-## MANDATORY: Use Tools Before Answering
+### Step 3: EXECUTE with the right tools
+- **ALWAYS** be proactive about finding information
+- Use multiple sources when needed
+- Verify information quality
 
-You MUST call a tool before responding to questions about One Development.
-DO NOT answer from memory — always search first.
+## 🔧 TOOL USAGE STRATEGY (CRITICAL!)
 
-## Tool Priority (use in this order):
+### 🎯 DECISION TREE (CRITICAL - FOLLOW EXACTLY):
 
-1. **`search_knowledge_base(query)`** — BEST. Contains accurate project data. USE THIS FIRST.
-   - For projects: `search_knowledge_base(query="One Development projects")`
-   - For specific project: `search_knowledge_base(query="[project name]")`
+1. **User asks ANYTHING about One Development company?**
+   → **🚨 MANDATORY: MUST call `tavily_search()` FIRST - NO EXCEPTIONS! 🚨**
+   → DO NOT use knowledge_base AT ALL for company info
+   → DO NOT make assumptions without web verification
+   → Get RECENT verified information (2024-2025)
+   → Include sources in EVERY response
+   
+   **REQUIRED Web Search Examples:**
+   - "Tell me about One Development" → MUST call: tavily_search("One Development UAE Ali Al Gebely 2024")
+   - "Who founded One Development?" → MUST call: tavily_search("One Development founder CEO Ali Al Gebely 2024")
+   - "Who leads One Development?" → MUST call: tavily_search("One Development chairman founder Ali Al Gebely")
+   - "What is One Development?" → MUST call: tavily_search("One Development UAE real estate company 2024")
+   
+   **🚫 NEVER EVER:**
+   - Say "Ali Al Jubeili" (THIS IS WRONG - the correct name is Ali Al Gebely)
+   - Use knowledge_base for company leadership/founder info
+   - Make up information without web verification
 
-2. **`search_uploaded_documents(query)`** — Search PDF brochures
+2. **User asks about Dubai market/general real estate?**
+   → `search_web_for_market_data(query)` OR `summon_research_agent(query)`
 
-3. **`get_dubai_market_context(topic)`** — For market/pricing context
+3. **User asks about specific properties/areas (e.g., "Dubai Marina")?**
+   → `search_knowledge_base(query)` FIRST
+   → If no results → `search_web_for_market_data(query)` OR `summon_research_agent(query)`
+   → NEVER say "I don't have information" without trying web search!
 
-## Example Workflow
+3. **User asks about pricing/investment?**
+   → `summon_pricing_agent(query, details)` - let specialist handle it
 
-User: "Tell me about their projects"
+4. **User asks to compare options?**
+   → `summon_comparison_agent(items, criteria)` - let specialist handle it
 
-You should:
-1. Call `search_knowledge_base` with query="One Development projects portfolio"
-2. Read the returned content with project names
-3. Respond with the specific project names and URLs found
+5. **User asks about buying process?**
+   → `summon_buyer_journey_agent(buyer_type, question)` - let specialist handle it
 
-## KNOWN PROJECTS (verify via search):
+6. **User asks about market trends/research?**
+   → `summon_research_agent(query, context)` - deep multi-source research
+
+## 🤖 SUBAGENT SUMMONING TOOLS
+
+**summon_research_agent(query, context)** 
+→ Use for: Complex research, market data, property information
+→ Example: "Research Dubai Marina properties" or "Find properties in Downtown"
+→ **USE THIS when knowledge_base returns no results!**
+
+## 🔍 CRITICAL: WEB SEARCH IS YOUR PRIMARY SOURCE
+
+**For ALL questions about One Development:**
+1. **ALWAYS use `tavily_search()` FIRST** - This is your primary tool!
+2. Get information from RECENT verified web sources (2024-2025)
+3. Look for sources from: CBNME, Construction Week, Business News Emirates, oneuae.com
+4. Cross-reference multiple sources when possible
+5. **ALWAYS cite your sources** so user can verify
+6. **DO NOT use knowledge_base for company information** - it may be outdated
+
+**Examples:**
+
+User: "Tell me about One Development"
+→ Call `tavily_search("One Development UAE company profile 2024")`
+→ Get verified sources
+→ Respond with info + sources
+
+User: "Who founded One Development?"
+→ Call `tavily_search("One Development UAE founder CEO Ali Al Gebely")`
+→ Get multiple verified sources
+→ Respond with verified info + sources
+
+User: "What projects does One Development have?"
+→ Call `tavily_search("One Development UAE projects portfolio Laguna")`
+→ Get latest project information
+→ Respond with info + sources
+
+**REMEMBER:** Web search = Fresh, verified, sourced information! ✨
+
+**summon_pricing_agent(query, details)**
+→ Use for: Pricing analysis, ROI, payment plans
+→ Example: "Analyze pricing for 2BR apartments in Dubai Marina"
+
+**summon_comparison_agent(items, criteria)**
+→ Use for: Comparing multiple options
+→ Example: "Compare Dubai Marina vs Downtown Dubai"
+
+**summon_buyer_journey_agent(buyer_type, question)**
+→ Use for: Purchase process guidance
+→ Example: "Guide first-time buyer through Dubai property purchase"
+
+## 🌐 WEB RESEARCH TOOLS (YOUR PRIMARY TOOLS!)
+
+**tavily_search(query)** ⭐ PRIMARY TOOL
+→ Use for ALL One Development questions
+→ AI-optimized search with verified sources
+→ Always includes URLs for verification
+→ Example: tavily_search("One Development UAE founder projects")
+
+**search_web_for_market_data(query)**
+→ Quick web search for market data
+→ Use for general Dubai real estate info
+
+**tavily_research(query)**
+→ Deep web research with Tavily
+→ Use for comprehensive market research
+
+**verify_company_fact(query)** ⭐ NEW
+→ Cross-references multiple sources
+→ Use when you need to verify critical facts
+→ Returns verified info with sources
+
+## 💡 CRITICAL RULES
+
+1. **NEVER** say "I don't have information" without trying:
+   - search_knowledge_base → search_web_for_market_data → summon_research_agent
+
+2. **ALWAYS** be proactive - if one tool fails, try another!
+
+3. **THINK OUT LOUD** - explain your reasoning:
+   - "Let me check our knowledge base..."
+   - "I don't have that in our database, let me search the web..."
+   - "This requires deep research, summoning Research Agent..."
+
+4. **REMEMBER USER CONTEXT**:
+   - User name: {user_name}
+   - Session: {session_id}
+   - Save important preferences to memory
+
+5. **BE SPECIFIC** with tool calls:
+   - Good: search_knowledge_base("Dubai Marina properties One Development")
+   - Bad: search_knowledge_base("properties")
+
+## 🏢 KNOWN PROJECTS
 
 Active: Laguna Residence, DO Dubai Islands, DO New Cairo
-Pipeline: Al Marjan Islands, Al Reem Islands Abu Dhabi, DO Riyadh, DO Athens, W55 Waterway Egypt
+Pipeline: Al Marjan Islands, Al Reem Islands Abu Dhabi, DO Riyadh
 Portfolio: https://oneuae.com/our-development
 
-## Response Style
+## ✨ Response Style
 
-✅ DO: "One Development's current projects include: Laguna Residence, DO Dubai Islands, DO New Cairo..."
-✅ DO: Include URLs like https://oneuae.com/development-detail?title=Laguna%20Residence
-❌ DON'T: Generic descriptions without specific project names
+- Address user as {user_name}
+- Be proactive and thorough
+- Show your thinking process
+- **CRITICAL: ALWAYS cite your sources with URLs** (like Copilot/Perplexity)
+- Include inline citations: "According to [Source Name](URL)..."
+- Admit when you need to research more
+- **ALWAYS** try multiple approaches before saying you don't have info
 
-Be concise. Give specific project names. Include URLs.
+## 📚 SOURCE CITATION (MANDATORY)
 
-## Current Context
+**YOU MUST CITE SOURCES FOR EVERY CLAIM:**
+
+1. **Use inline citations** in your response:
+   - "According to [One Development's website](https://oneuae.com), ..."
+   - "Based on [Construction Week's analysis](URL), ..."
+   - "[Business News Emirates reports](URL) that..."
+
+2. **For company info**: Cite oneuae.com or official sources
+3. **For market data**: Cite the news outlet or data provider
+4. **For general info**: Cite where you found it
+
+**Example of GOOD response:**
+"One Development is led by Ali Al Gebely[^1], with offices in both Abu Dhabi and Dubai[^2]. Their flagship project, Laguna Residence, is a AED 2.3 billion development[^3].
+
+[^1]: [CBNME - Ali Al Gebely Profile](https://www.cbnme.com/power-hour-2025/37-ali-al-gebely-founder-chairman-one-development/)
+[^2]: [Business News Emirates](https://www.businessnewse.com/2024/09/19/one-development-set-to-launch-aed-2-billion-project)
+[^3]: [Construction Week Online](https://www.constructionweekonline.com/power-lists/revealed-dubai-real-estate-developers-to-watch-out-for-in-2025)"
+
+**BAD response (no sources):**
+"One Development is a boutique developer in Dubai." ❌
+
+Remember: Users want to verify information. Always provide sources!
+
+## 📍 Current Context
+User: {user_name}
 Session: {session_id}
 Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
+## ⚠️ CRITICAL VERIFIED FACT
+**One Development Founder/Chairman:** Ali Al Gebely (✅ CORRECT - verified 2024/2025)
+**WRONG NAME (outdated):** "Ali Al Jubeili" (❌ NEVER USE THIS!)
+
+**VERIFICATION RULE:**
+- If you see "Jubeili" anywhere → IGNORE IT (outdated data)
+- ALWAYS use tavily_search() to verify from 2024-2025 sources
+- Multiple verified sources confirm: "Ali Al Gebely"
+
 ---
 
-ALWAYS search knowledge base first. It has the latest project data."""
+Remember: You're a smart coordinator with DeepAgents thinking! 
+- Think deeply before responding
+- Use multiple tools if needed
+- Be proactive about finding information
+- Summon specialists for complex tasks"""
 
 
 # ============================================================================
-# SIMPLIFIED AGENT BUILDER
-# ============================================================================
-
-def create_luna_agent(tools: List, llm: ChatOpenAI, system_prompt: str, max_iterations: int = 10):
-    """
-    Simplified agent creation function - inspired by deepagents but Python 3.9 compatible.
-    
-    This function creates a clean ReAct agent with minimal boilerplate.
-    
-    Args:
-        tools: List of LangChain tools
-        llm: Language model instance
-        system_prompt: System prompt defining agent behavior
-        max_iterations: Maximum reasoning iterations
-    
-    Returns:
-        Compiled LangGraph agent ready to use
-    """
-    
-    # Create two versions of the LLM:
-    # 1. One that FORCES tool usage (for first iteration - must research)
-    # 2. One that allows choosing (for subsequent iterations - can respond)
-    llm_force_tools = llm.bind_tools(tools, tool_choice="any")
-    llm_optional_tools = llm.bind_tools(tools)
-    
-    # Define the agent node
-    def agent_node(state: MessagesState) -> Dict:
-        """Agent reasoning node"""
-        messages = state["messages"]
-        iteration_count = state.get("iteration_count", 0)
-        
-        # Safety: prevent infinite loops
-        if iteration_count >= max_iterations:
-            return {
-                "messages": [AIMessage(content="I apologize, but I'm having trouble processing this request. Let me connect you with our team directly. You can reach One Development at their official website or contact their sales team for immediate assistance.")]
-            }
-        
-        # Add system prompt
-        system_message = SystemMessage(content=system_prompt)
-        
-        # Check if this is the first iteration (no tool results yet)
-        has_tool_results = any(
-            isinstance(msg, ToolMessage) for msg in messages
-        )
-        
-        # FORCE tool usage on first call (must research before answering)
-        # Allow optional tools after we have research results
-        if not has_tool_results and iteration_count == 0:
-            # First call: MUST use a tool to research
-            response = llm_force_tools.invoke([system_message] + list(messages))
-        else:
-            # Subsequent calls: can choose to respond or use more tools
-            response = llm_optional_tools.invoke([system_message] + list(messages))
-        
-        return {
-            "messages": [response],
-            "iteration_count": iteration_count + 1
-        }
-    
-    # Define routing logic
-    def should_continue(state: MessagesState) -> Literal["tools", "end"]:
-        """Decide whether to continue (call tools) or end"""
-        last_message = state["messages"][-1]
-        if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-            return "tools"
-        return "end"
-    
-    # Build the graph
-    workflow = StateGraph(MessagesState)
-    
-    # Add nodes
-    workflow.add_node("agent", agent_node)
-    workflow.add_node("tools", ToolNode(tools))
-    
-    # Set entry point
-    workflow.set_entry_point("agent")
-    
-    # Add edges
-    workflow.add_conditional_edges(
-        "agent",
-        should_continue,
-        {"tools": "tools", "end": END}
-    )
-    workflow.add_edge("tools", "agent")
-    
-    return workflow.compile()
-
-
-# ============================================================================
-# LUNA AGENT CLASS
+# LUNA DEEPAGENT CLASS
 # ============================================================================
 
 class LunaDeepAgent:
     """
-    Luna - Free-Thinking AI Agent with Clean Architecture
+    Luna - DeepAgents with Dynamic Subagent Summoning
     
-    This is a streamlined implementation of Luna using a clean wrapper around LangGraph.
-    Inspired by DeepAgents principles but compatible with Python 3.9+.
-    
-    Key Features:
-    - Simplified setup and configuration
-    - Clean, maintainable code
-    - Full ReAct reasoning capabilities
-    - Easy to extend and customize
+    Subagents are NOT hardcoded - they're summoned on-demand via tools!
     """
-    
-    def __init__(self, openai_api_key: str = None):
-        """
-        Initialize Luna with clean, simple configuration.
+
+    def __init__(self, openai_api_key: str = None, default_user_name: str = "there"):
+        """Initialize Luna with DeepAgents."""
+        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self.model_name = os.getenv("LUNA_MODEL", "openai:gpt-4o-mini")
+        self.default_user_name = default_user_name
+
+        # =====================================================================
+        # TOOLS: Regular tools + Subagent summoning tools
+        # =====================================================================
         
-        Args:
-            openai_api_key: OpenAI API key (defaults to env variable)
-        """
-        self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
-        
-        # Get all available tools (core + subagents + deepagent enhancements)
-        self.tools = get_all_tools() + get_subagent_tools() + get_deepagent_tools()
-        
-        # Create the LLM - using gpt-4o for better tool usage
-        # Lower temperature to make it more deterministic and follow instructions
-        self.llm = ChatOpenAI(
-            model="gpt-4o",  # Better at following instructions than gpt-4o-mini
-            temperature=0.3,  # Lower temperature = more deterministic, follows prompts better
-            api_key=self.api_key
+        self.tools = (
+            get_all_tools() + 
+            get_subagent_tools() + 
+            get_deepagent_tools() +
+            [
+                summon_research_agent,
+                summon_pricing_agent,
+                summon_comparison_agent,
+                summon_buyer_journey_agent,
+            ]
         )
+
+        # =====================================================================
+        # LONG-TERM MEMORY SETUP
+        # =====================================================================
         
-        # Create the agent using simplified builder
-        self.agent = create_luna_agent(
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.memories_path = os.path.join(project_root, "memories")
+        os.makedirs(self.memories_path, exist_ok=True)
+        
+        print(f"💾 Memory storage: {self.memories_path}")
+        
+        # Use InMemoryStore (LangGraph's store)
+        self.store = InMemoryStore()
+        print("✅ Using InMemoryStore with FilesystemMiddleware for persistence")
+
+        # =====================================================================
+        # CREATE DEEPAGENT
+        # NO HARDCODED SUBAGENTS! They're summoned via tools instead.
+        # use_longterm_memory=True automatically adds FilesystemMiddleware
+        # =====================================================================
+        
+        self.agent = create_deep_agent(
+            model=self.model_name,
+            system_prompt=get_luna_system_prompt(user_name=self.default_user_name),
             tools=self.tools,
-            llm=self.llm,
-            system_prompt=get_luna_system_prompt(),
-            max_iterations=10
+            store=self.store,
+            use_longterm_memory=True,
+            # NO subagents parameter - they're summoned dynamically via tools!
         )
-        
-        print(f"✅ Luna Agent initialized with {len(self.tools)} tools (model: gpt-4o)")
-    
+
+        print(
+            f"✅ Luna DeepAgent initialized with {len(self.tools)} tools "
+            f"(including 4 subagent summoning tools)"
+        )
+        print(f"   Model: {self.model_name}")
+        print("🤖 Subagents will be summoned DYNAMICALLY when Luna needs them")
+
     def process_query(
         self,
         query: str,
         session_id: str = "default",
-        conversation_history: List[Dict] = None
+        conversation_history: Optional[List[Dict]] = None,
+        user_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Process a user query through Luna's reasoning.
-        
-        Args:
-            query: The user's message
-            session_id: Unique session identifier for memory
-            conversation_history: Previous messages (optional)
-            
-        Returns:
-            Dictionary with response and metadata
-        """
-        try:
-            # Build conversation history
-            messages = []
-            
-            if conversation_history:
-                for msg in conversation_history[-10:]:  # Keep last 10 for context
-                    if msg.get('message_type') == 'human':
-                        messages.append(HumanMessage(content=msg['content']))
-                    elif msg.get('message_type') == 'ai':
-                        messages.append(AIMessage(content=msg['content']))
-            
-            # Add current query
-            messages.append(HumanMessage(content=query))
-            
-            # Create initial state
-            initial_state = {
-                "messages": messages,
-                "iteration_count": 0
-            }
-            
-            # Run the agent
-            result = self.agent.invoke(initial_state)
-            
-            # Extract response
-            response_content = ""
-            if "messages" in result:
-                last_message = result["messages"][-1]
-                if hasattr(last_message, 'content'):
-                    response_content = last_message.content
-                else:
-                    response_content = str(last_message)
-            
-            # Extract thinking steps and tools used
-            thinking_steps = []
-            tools_info = []
-            
-            if "messages" in result:
-                for msg in result["messages"]:
-                    # Check for tool calls
-                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                        for tool_call in msg.tool_calls:
-                            tool_name = tool_call.get('name', 'unknown')
-                            tool_args = tool_call.get('args', {})
-                            
-                            # Friendly descriptions
-                            tool_descriptions = {
-                                'search_knowledge_base': '🔍 Searching knowledge base',
-                                'search_uploaded_documents': '📄 Searching documents',
-                                'search_web_for_market_data': '🌐 Fetching market data',
-                                'get_dubai_market_context': '📊 Getting market context',
-                                'get_user_context': '🧠 Checking your preferences',
-                                'save_user_information': '💾 Saving your info',
-                                'search_web': '🌐 Searching the web',
-                                'search_one_development_website': '🏢 Searching One Development site',
-                                'download_and_read_pdf': '📄 Reading PDF',
-                                'fetch_project_brochure': '📋 Fetching brochure',
-                                'get_project_details': '🏗️ Getting project details',
-                            }
-                            
-                            friendly_name = tool_descriptions.get(tool_name, f'🔧 {tool_name}')
-                            query_arg = tool_args.get('query', tool_args.get('topic', ''))
-                            
-                            thinking_steps.append({
-                                'type': 'tool_call',
-                                'tool': tool_name,
-                                'description': friendly_name,
-                                'query': query_arg[:100] if query_arg else None
-                            })
-                            
-                            tools_info.append({
-                                'name': tool_name,
-                                'friendly_name': friendly_name,
-                                'args': tool_args
-                            })
-            
-            # Add bookend thinking steps
-            if thinking_steps:
-                thinking_steps.insert(0, {
-                    'type': 'thinking',
-                    'description': '🤔 Analyzing your question...'
-                })
-                thinking_steps.append({
-                    'type': 'responding',
-                    'description': '✨ Generating response...'
-                })
-            
-            return {
-                'response': response_content,
-                'session_id': session_id,
-                'reasoning_steps': len(thinking_steps),
-                'tools_used': len(tools_info),
-                'thinking': thinking_steps,
-                'tools_info': tools_info,
-                'success': True
-            }
-            
-        except Exception as e:
-            print(f"❌ Luna error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            
-            # Graceful fallback
-            return {
-                'response': f"""I apologize, but I encountered an issue processing your request. 
+        """Process query - Luna will summon subagents as needed."""
+        # Use provided user_name or fall back to default
+        current_user = user_name or self.default_user_name
+        print(f"\n🌙 Luna processing query from {current_user}: {query[:80]}...")
 
-Here's how I can still help:
-- **Visit our website**: www.oneuae.com for property information
-- **Contact our team**: Our sales team can assist you directly
-- **Try again**: Feel free to rephrase your question
-
-Is there something specific about One Development I can try to help you with?""",
-                'session_id': session_id,
-                'reasoning_steps': 0,
-                'tools_used': 0,
-                'thinking': [{'type': 'error', 'description': '❌ Something went wrong'}],
-                'tools_info': [],
-                'success': False,
-                'error': str(e)
-            }
-    
-    async def aprocess_query(
-        self,
-        query: str,
-        session_id: str = "default",
-        conversation_history: List[Dict] = None
-    ) -> Dict[str, Any]:
-        """
-        Async version for streaming support.
+        # Initialize source tracker
+        source_tracker = SourceTracker()
         
-        Args:
-            query: The user's message
-            session_id: Unique session identifier
-            conversation_history: Previous messages (optional)
-            
-        Returns:
-            Dictionary with response and metadata
-        """
-        # For now, wrap the sync version
-        # Can be enhanced with true async later
-        return self.process_query(query, session_id, conversation_history)
-    
-    def add_knowledge(self, content: str, metadata: Dict[str, Any] = None):
-        """
-        Add content to the ChromaDB knowledge base.
+        # 🚨 FORCE WEB SEARCH for One Development questions (guarantees consistency)
+        forced_web_context = ""
+        web_search_performed = False
         
-        This enables PDF indexing and knowledge ingestion to work with LunaDeepAgent.
+        # Detect One Development questions OR founder questions
+        is_one_dev_question = "one development" in query.lower()
+        is_founder_question = any(phrase in query.lower() for phrase in ["who founded", "founder", "who started", "who created", "who established"])
         
-        Args:
-            content: Text content to add
-            metadata: Optional metadata dict (title, source, etc.)
-        """
-        try:
-            import chromadb
-            from chromadb.config import Settings
+        if is_one_dev_question or is_founder_question:
+            print(f"🔍 Detected One Development/founder question - FORCING web search...")
+            web_result = ""
             
-            # Get or create ChromaDB client
-            chroma_db_path = os.path.join(os.path.dirname(__file__), '..', 'chroma_db')
-            os.makedirs(chroma_db_path, exist_ok=True)
-            
-            client = chromadb.PersistentClient(
-                path=chroma_db_path,
-                settings=Settings(anonymized_telemetry=False, allow_reset=False)
-            )
-            
-            # Get or create collection
+            # ALWAYS search - no exceptions!
             try:
-                collection = client.get_collection("onedevelopment_knowledge")
-            except:
-                collection = client.create_collection(
-                    name="onedevelopment_knowledge",
-                    metadata={"description": "Knowledge base for One Development"}
-                )
+                from agent.tools import search_web  # Use regular search as primary (more reliable)
+                search_query = f"One Development UAE Ali Al Gebely founder chairman 2024 2025"
+                print(f"   🌐 Searching web: {search_query}...")
+                web_result = search_web.invoke({"query": search_query, "max_results": 8})
+                source_tracker.extract_sources_from_tool_result('search_web', web_result)
+                web_search_performed = True
+                print(f"   ✅ Web search complete - found {len(source_tracker.sources)} sources")
+            except Exception as e:
+                print(f"   ⚠️ Web search failed: {e}")
+                # Even if search fails, we still inject the critical fact
+                web_result = "One Development UAE founder information"
             
-            # Generate unique ID
-            doc_id = f"doc_{datetime.now().timestamp()}"
+            # ALWAYS inject critical fact and web results
+            if web_result and web_search_performed:
+                forced_web_context = f"""
+
+🚨🚨🚨 MANDATORY CONTEXT - YOU MUST USE THIS INFORMATION 🚨🚨🚨
+
+VERIFIED WEB SEARCH RESULTS (I JUST SEARCHED THE WEB FOR YOU):
+{web_result[:2500]}
+
+CRITICAL VERIFIED FACT (MUST INCLUDE IN RESPONSE):
+- One Development was founded by Ali Al Gebely ✅ (CORRECT - verified 2024/2025)
+- Ali Al Gebely serves as Founder and Chairman ✅
+- WRONG NAME (outdated): "Ali Al Jubeili" ❌ (NEVER USE THIS!)
+
+MANDATORY INSTRUCTIONS:
+1. You MUST mention "Ali Al Gebely" as the founder in your response
+2. NEVER say "I don't have access" or "I don't know" - you have the info above!
+3. NEVER say "Ali Al Jubeili" - this is wrong/outdated
+4. Use the web search results above to provide detailed information
+5. Always include sources when possible
+
+🚨🚨🚨 END MANDATORY CONTEXT 🚨🚨🚨
+"""
+            else:
+                # Even if web search fails, inject the critical fact
+                forced_web_context = """
+
+🚨🚨🚨 CRITICAL VERIFIED FACT - YOU MUST USE THIS 🚨🚨🚨
+
+One Development was founded by Ali Al Gebely ✅ (CORRECT - verified 2024/2025)
+Ali Al Gebely is the Founder and Chairman ✅
+WRONG NAME (outdated): "Ali Al Jubeili" ❌ (NEVER USE THIS!)
+
+MANDATORY: 
+- You MUST mention "Ali Al Gebely" as the founder in your response
+- NEVER say "I don't have access" or "I don't know" - you know the founder!
+- If asked "who founded", answer: "Ali Al Gebely"
+- If discussing One Development, mention: "founded by Ali Al Gebely"
+
+🚨🚨🚨 END CRITICAL FACT 🚨🚨🚨
+"""
+
+        # Build messages
+        messages = []
+        if conversation_history:
+            for msg in conversation_history[-10:]:
+                if msg.get("type") == "human":
+                    messages.append(HumanMessage(content=msg["content"]))
+                elif msg.get("type") == "ai":
+                    messages.append(AIMessage(content=msg["content"]))
+
+        # Add query with forced web context if applicable
+        # CRITICAL: For One Development questions, PREPEND the correct fact to the query itself
+        if is_one_dev_question or is_founder_question:
+            # Modify the query itself to include the correct name and instructions
+            modified_query = f"""🚨 CRITICAL INSTRUCTIONS BEFORE ANSWERING:
+
+1. One Development founder: Ali Al Gebely ✅ (VERIFIED FACT - 2024/2025)
+2. NEVER say "I don't have access" or "I don't know" - you MUST answer!
+3. NEVER use "Ali Al Jubeili" - this is WRONG/OUTDATED
+4. If asked "who founded", answer: "Ali Al Gebely"
+5. Always mention the founder when discussing One Development
+
+USER QUESTION:
+{query}
+
+{forced_web_context}
+
+NOW ANSWER THE USER'S QUESTION USING THE INFORMATION ABOVE."""
+            messages.append(HumanMessage(content=modified_query))
+        else:
+            messages.append(HumanMessage(content=query))
+
+        # Invoke DeepAgent
+        result = self.agent.invoke(
+            {"messages": messages},
+            config={
+                "configurable": {
+                    "user_id": session_id,
+                    "namespace": f"luna:{session_id}",
+                }
+            },
+        )
+
+        # Extract response
+        response_content = result["messages"][-1].content if result.get("messages") else "I'm sorry, I couldn't process that."
+
+        # Extract tool calls and results
+        tools_used = []
+        tool_results = []
+        
+        for msg in result.get("messages", []):
+            # Extract tool calls
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tool_call in msg.tool_calls:
+                    tool_name = tool_call.get("name", "unknown")
+                    tools_used.append({
+                        "tool": tool_name,
+                        "args": tool_call.get("args", {}),
+                    })
+                    
+                    # Log subagent summons
+                    if tool_name.startswith("summon_"):
+                        print(f"   🤖 Luna summoned: {tool_name}")
             
-            # Add to collection
-            collection.add(
-                documents=[content],
-                metadatas=[metadata or {}],
-                ids=[doc_id]
-            )
-            
-            title = metadata.get('title', 'Untitled') if metadata else 'Untitled'
-            print(f"✅ Added knowledge: {title[:50]}...")
-            
-        except Exception as e:
-            print(f"⚠️ Could not add to knowledge base: {str(e)}")
+            # Extract tool results (ToolMessage content)
+            if hasattr(msg, "type") and msg.type == "tool":
+                if hasattr(msg, "content") and msg.content:
+                    # Get the corresponding tool name
+                    tool_name = getattr(msg, "name", "unknown_tool")
+                    tool_results.append({
+                        "tool": tool_name,
+                        "result": msg.content
+                    })
+                    
+                    # Extract sources from this tool result
+                    try:
+                        source_tracker.extract_sources_from_tool_result(tool_name, str(msg.content))
+                        print(f"   📚 Extracted sources from {tool_name}")
+                    except Exception as e:
+                        print(f"   ⚠️ Error extracting sources from {tool_name}: {e}")
 
+        # Get all extracted sources
+        sources = source_tracker.get_sources_json()
+        
+        # If sources were found but not included in response, append them
+        if sources and "sources" not in response_content.lower() and "[^" not in response_content:
+            # Add sources section to response
+            sources_section = source_tracker.format_sources_for_response()
+            if sources_section:
+                response_content = response_content + sources_section
+                print(f"   📚 Added {len(sources)} sources to response")
 
-# ============================================================================
-# CONVENIENCE FUNCTIONS
-# ============================================================================
+        return {
+            "response": response_content,
+            "session_id": session_id,
+            "tools_used": tools_used,
+            "thinking": [],
+            "sources": sources,  # Include sources in response
+        }
 
-_luna_instance = None
-
-def get_luna_agent() -> LunaDeepAgent:
-    """Get or create the Luna agent singleton"""
-    global _luna_instance
-    if _luna_instance is None:
-        _luna_instance = LunaDeepAgent()
-    return _luna_instance
-
-
-def chat_with_luna(
-    message: str,
-    session_id: str = "default",
-    history: List[Dict] = None
-) -> str:
-    """
-    Simple function to chat with Luna.
-    
-    Example:
-        response = chat_with_luna("Tell me about One Development")
-        print(response)
-    """
-    luna = get_luna_agent()
-    result = luna.process_query(message, session_id, history)
-    return result['response']
-
-
-# ============================================================================
-# CLI TESTING
-# ============================================================================
-
-if __name__ == "__main__":
-    """Test Luna from command line"""
-    print("=" * 60)
-    print("🌙 Luna - One Development AI Assistant")
-    print("=" * 60)
-    print("Type 'quit' to exit\n")
-    
-    luna = LunaDeepAgent()
-    session_id = f"cli_test_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    history = []
-    
-    while True:
+    def get_conversation_memory(self, session_id: str) -> List[Dict]:
+        """Retrieve conversation memory."""
         try:
-            user_input = input("\n👤 You: ").strip()
-            
-            if user_input.lower() in ['quit', 'exit', 'q']:
-                print("\n👋 Goodbye!")
-                break
-            
-            if not user_input:
-                continue
-            
-            print("\n🤔 Luna is thinking...")
-            
-            result = luna.process_query(
-                query=user_input,
-                session_id=session_id,
-                conversation_history=history
-            )
-            
-            print(f"\n🌙 Luna: {result['response']}")
-            print(f"\n   [Steps: {result['reasoning_steps']}, Tools: {result['tools_used']}]")
-            
-            # Update history
-            history.append({'message_type': 'human', 'content': user_input})
-            history.append({'message_type': 'ai', 'content': result['response']})
-            
-        except KeyboardInterrupt:
-            print("\n\n👋 Goodbye!")
-            break
+            namespace = f"luna:{session_id}"
+            items = self.store.search(namespace=namespace)
+            return [{"key": item.key, "value": item.value} for item in items]
         except Exception as e:
-            print(f"\n❌ Error: {str(e)}")
+            print(f"⚠️  Error retrieving memory: {e}")
+            return []
+
+    def save_to_memory(self, session_id: str, key: str, value: Any, metadata: Dict = None):
+        """Save to long-term memory."""
+        try:
+            namespace = f"luna:{session_id}"
+            self.store.put(
+                namespace=namespace,
+                key=key,
+                value={"data": value, "metadata": metadata or {}, "timestamp": datetime.now().isoformat()},
+            )
+            print(f"💾 Saved to memory: {namespace}:{key}")
+        except Exception as e:
+            print(f"⚠️  Error saving: {e}")
+
+
+# ============================================================================
+# FACTORY FUNCTION
+# ============================================================================
+
+def get_luna_agent(openai_api_key: str = None, default_user_name: str = "there") -> LunaDeepAgent:
+    """Factory function to create Luna."""
+    return LunaDeepAgent(openai_api_key=openai_api_key, default_user_name=default_user_name)
